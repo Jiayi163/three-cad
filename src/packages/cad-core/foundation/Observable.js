@@ -129,6 +129,16 @@ export class Observable {
   }
 
   /**
+   * Notify property change to all listeners (public method)
+   * @param {string} name - Property name
+   * @param {any} oldValue - Old property value
+   * @param {any} newValue - New property value
+   */
+  notifyPropertyChanged(name, oldValue, newValue) {
+    this._notifyPropertyChanged(name, newValue, oldValue)
+  }
+
+  /**
    * Notify property change to all listeners
    * @private
    * @param {string} name - Property name
