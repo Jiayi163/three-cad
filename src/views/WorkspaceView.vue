@@ -29,7 +29,7 @@
 
     <main class="workspace-main">
       <div class="viewport-container">
-        <ThreeScene />
+        <ThreeScene :showDebugInfo="isDevelopment" />
         <div class="viewport-overlay">
           <div class="controls-hint">
             <p><strong>Controls:</strong></p>

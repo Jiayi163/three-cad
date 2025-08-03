@@ -1,23 +1,102 @@
 <template>
   <div ref="containerRef" class="three-container">
     <div v-if="error" class="error-message">
-      WebGL Error: {{ error }}
+      {{ error }}
+    </div>
+    <div v-if="threeView && showDebugInfo" class="debug-info">
+      <div>Selection: {{ selectionCount }} objects</div>
+      <div>Camera: {{ Math.round(cameraDistance) }} units</div>
+      <div>FPS: {{ fps }}</div>
+      <div class="sensitivity-controls">
+        <div>
+          <label>Rotate: </label>
+          <input 
+            type="range" 
+            min="0.1" 
+            max="2.0" 
+            step="0.1" 
+            :value="rotateSpeed" 
+            @input="updateRotateSpeed($event.target.value)"
+            @mousedown.stop
+            @mousemove.stop
+            @mouseup.stop
+            @click.stop
+          >
+          <span>{{ rotateSpeed.toFixed(1) }}</span>
+        </div>
+        <div>
+          <label>Pan: </label>
+          <input 
+            type="range" 
+            min="0.1" 
+            max="3.0" 
+            step="0.1" 
+            :value="panSpeed" 
+            @input="updatePanSpeed($event.target.value)"
+            @mousedown.stop
+            @mousemove.stop
+            @mouseup.stop
+            @click.stop
+          >
+          <span>{{ panSpeed.toFixed(1) }}</span>
+        </div>
+        <div>
+          <label>Zoom: </label>
+          <input 
+            type="range" 
+            min="0.8" 
+            max="0.99" 
+            step="0.01" 
+            :value="zoomSpeed" 
+            @input="updateZoomSpeed($event.target.value)"
+            @mousedown.stop
+            @mousemove.stop
+            @mouseup.stop
+            @click.stop
+          >
+          <span>{{ zoomSpeed.toFixed(2) }}</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, markRaw } from 'vue'
+import { storeToRefs } from 'pinia'
 import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { ThreeView } from '../packages/cad-three/ThreeView.js'
+import { useApplicationStore } from '../stores/application.js'
 
 export default {
   name: 'ThreeScene',
-  setup() {
+  props: {
+    showDebugInfo: {
+      type: Boolean,
+      default: false
+    }
+  },
+  setup(props) {
     const containerRef = ref(null)
     const error = ref(null)
+    const threeView = ref(null)
     
-    let scene, camera, renderer, cube, controls, animationId
+    // Application store
+    const applicationStore = useApplicationStore()
+    const { activeDocument } = storeToRefs(applicationStore)
+    
+    // Debug info
+    const selectionCount = ref(0)
+    const cameraDistance = ref(0)
+    const fps = ref(0)
+    
+    // Sensitivity controls
+    const rotateSpeed = ref(0.2)
+    const panSpeed = ref(0.5)
+    const zoomSpeed = ref(0.95)
+    
+    let fpsCounter = 0
+    let lastFpsTime = 0
     
     const checkWebGLSupport = () => {
       const canvas = document.createElement('canvas')
@@ -25,171 +104,201 @@ export default {
       return !!gl
     }
     
-    const initThree = () => {
+    const initThreeView = () => {
       try {
         // Check WebGL support
         if (!checkWebGLSupport()) {
           throw new Error('WebGL is not supported in this browser')
         }
         
-        // Create scene
-        scene = new THREE.Scene()
-        scene.background = new THREE.Color(0x222222)
+        // Create ThreeView with active document
+        const document = activeDocument.value
+        threeView.value = new ThreeView(document, 'main')
         
-        // Create camera
-        const container = containerRef.value
-        const width = container.clientWidth
-        const height = container.clientHeight
-        
-        camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000)
-        camera.position.set(5, 5, 5)
-        camera.lookAt(0, 0, 0)
-        
-        // Create renderer
-        renderer = new THREE.WebGLRenderer({ 
-          antialias: true,
-          alpha: true
-        })
-        renderer.setSize(width, height)
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-        renderer.shadowMap.enabled = true
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap
-        
-        // Add renderer to container
-        container.appendChild(renderer.domElement)
-        
-        // Add lights
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.6)
-        scene.add(ambientLight)
-        
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
-        directionalLight.position.set(10, 10, 5)
-        directionalLight.castShadow = true
-        directionalLight.shadow.mapSize.width = 1024
-        directionalLight.shadow.mapSize.height = 1024
-        scene.add(directionalLight)
-        
-        // Create cube geometry and material
-        const geometry = new THREE.BoxGeometry(2, 2, 2)
-        const material = new THREE.MeshLambertMaterial({ 
-          color: 0x00ff00,
-          transparent: true,
-          opacity: 0.8
+        // Set up property listeners for debug info
+        threeView.value.onPropertyChanged('selectionCount', (count) => {
+          selectionCount.value = count || 0
         })
         
-        cube = new THREE.Mesh(geometry, material)
-        cube.castShadow = true
-        cube.receiveShadow = true
-        scene.add(cube)
+        if (threeView.value.cameraController) {
+          threeView.value.cameraController.onPropertyChanged('distance', (distance) => {
+            cameraDistance.value = distance || 0
+          })
+        }
         
-        // Add ground plane
-        const planeGeometry = new THREE.PlaneGeometry(20, 20)
-        const planeMaterial = new THREE.MeshLambertMaterial({ color: 0x808080 })
-        const plane = new THREE.Mesh(planeGeometry, planeMaterial)
-        plane.rotation.x = -Math.PI / 2
-        plane.position.y = -2
-        plane.receiveShadow = true
-        scene.add(plane)
+        // Attach to DOM
+        if (containerRef.value) {
+          threeView.value.setDom(containerRef.value)
+        }
         
-        // Add orbit controls
-        controls = new OrbitControls(camera, renderer.domElement)
-        controls.enableDamping = true
-        controls.dampingFactor = 0.05
-        controls.screenSpacePanning = false
-        controls.minDistance = 3
-        controls.maxDistance = 20
-        controls.maxPolarAngle = Math.PI / 2
+        // Add some demo objects for now
+        addDemoObjects()
         
-        console.log('Three.js scene initialized successfully')
+        // Set up FPS monitoring
+        if (props.showDebugInfo) {
+          startFpsMonitoring()
+        }
+        
+        console.log('ThreeView initialized successfully')
         
       } catch (err) {
-        console.error('Three.js initialization failed:', err)
+        console.error('ThreeView initialization failed:', err)
         error.value = err.message
       }
     }
     
-    const animate = () => {
-      animationId = requestAnimationFrame(animate)
+    const addDemoObjects = () => {
+      if (!threeView.value) return
       
-      if (cube) {
-        // Rotate cube
-        cube.rotation.x += 0.005
-        cube.rotation.y += 0.01
-        
-        // Add slight floating motion
-        cube.position.y = Math.sin(Date.now() * 0.002) * 0.5
-      }
+      // Add a demo cube (similar to the original)
+      const geometry = markRaw(new THREE.BoxGeometry(2, 2, 2))
+      const material = markRaw(new THREE.MeshStandardMaterial({ 
+        color: 0x4CAF50,
+        metalness: 0.1,
+        roughness: 0.3
+      }))
       
-      if (controls) {
-        controls.update()
-      }
+      const cube = markRaw(new THREE.Mesh(geometry, material))
+      cube.castShadow = true
+      cube.receiveShadow = true
+      cube.userData.nodeId = 'demo-cube'
       
-      if (renderer && scene && camera) {
-        renderer.render(scene, camera)
+      // Add floating animation
+      const animate = () => {
+        if (cube && threeView.value) {
+          cube.rotation.x += 0.005
+          cube.rotation.y += 0.01
+          cube.position.y = Math.sin(Date.now() * 0.002) * 0.5
+          threeView.value.requestRender()
+        }
+        requestAnimationFrame(animate)
       }
+      animate()
+      
+      threeView.value.addVisualObject('demo-cube', cube)
+      
+      // Add a ground plane
+      const planeGeometry = markRaw(new THREE.PlaneGeometry(20, 20))
+      const planeMaterial = markRaw(new THREE.MeshStandardMaterial({ 
+        color: 0x808080,
+        metalness: 0.1,
+        roughness: 0.8
+      }))
+      const plane = markRaw(new THREE.Mesh(planeGeometry, planeMaterial))
+      plane.rotation.x = -Math.PI / 2
+      plane.position.y = -2
+      plane.receiveShadow = true
+      plane.userData.nodeId = 'demo-ground'
+      
+      threeView.value.addVisualObject('demo-ground', plane)
     }
     
-    const handleResize = () => {
-      if (!camera || !renderer || !containerRef.value) return
-      
-      const container = containerRef.value
-      const width = container.clientWidth
-      const height = container.clientHeight
-      
-      camera.aspect = width / height
-      camera.updateProjectionMatrix()
-      renderer.setSize(width, height)
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    const startFpsMonitoring = () => {
+      const updateFps = () => {
+        fpsCounter++
+        const now = performance.now()
+        
+        if (now - lastFpsTime >= 1000) {
+          fps.value = Math.round((fpsCounter * 1000) / (now - lastFpsTime))
+          fpsCounter = 0
+          lastFpsTime = now
+        }
+        
+        requestAnimationFrame(updateFps)
+      }
+      updateFps()
     }
     
     const cleanup = () => {
-      if (animationId) {
-        cancelAnimationFrame(animationId)
+      if (threeView.value) {
+        threeView.value.dispose()
+        threeView.value = null
       }
-      
-      window.removeEventListener('resize', handleResize)
-      
-      if (controls) {
-        controls.dispose()
-      }
-      
-      if (renderer) {
-        renderer.dispose()
-        if (containerRef.value && renderer.domElement) {
-          containerRef.value.removeChild(renderer.domElement)
-        }
-      }
-      
-      // Clean up geometries and materials
-      scene?.traverse((child) => {
-        if (child.geometry) {
-          child.geometry.dispose()
-        }
-        if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach(material => material.dispose())
-          } else {
-            child.material.dispose()
-          }
-        }
-      })
     }
     
-    onMounted(() => {
-      initThree()
-      if (!error.value) {
-        animate()
-        window.addEventListener('resize', handleResize)
+    // Watch for document changes
+    watch(activeDocument, (newDocument) => {
+      if (threeView.value && newDocument) {
+        // Update ThreeView's document reference
+        threeView.value.document = newDocument
+        console.log('ThreeView document updated')
       }
+    })
+    
+    onMounted(() => {
+      initThreeView()
     })
     
     onUnmounted(() => {
       cleanup()
     })
     
+    // Expose methods for external use
+    const getThreeView = () => threeView.value
+    const addObject = (nodeId, object3D) => {
+      if (threeView.value) {
+        threeView.value.addVisualObject(nodeId, object3D)
+      }
+    }
+    const removeObject = (nodeId) => {
+      if (threeView.value) {
+        threeView.value.removeVisualObject(nodeId)
+      }
+    }
+    const fitAll = () => {
+      if (threeView.value && threeView.value.cameraController) {
+        threeView.value.cameraController.fitAll()
+      }
+    }
+    const setView = (viewName) => {
+      if (threeView.value && threeView.value.cameraController) {
+        threeView.value.cameraController.setView(viewName)
+      }
+    }
+    
+    // Sensitivity control methods
+    const updateRotateSpeed = (value) => {
+      const speed = parseFloat(value)
+      rotateSpeed.value = speed
+      if (threeView.value && threeView.value.cameraController) {
+        threeView.value.cameraController.setRotateSpeed(speed)
+      }
+    }
+    
+    const updatePanSpeed = (value) => {
+      const speed = parseFloat(value)
+      panSpeed.value = speed
+      if (threeView.value && threeView.value.cameraController) {
+        threeView.value.cameraController.setPanSpeed(speed)
+      }
+    }
+    
+    const updateZoomSpeed = (value) => {
+      const speed = parseFloat(value)
+      zoomSpeed.value = speed
+      if (threeView.value && threeView.value.cameraController) {
+        threeView.value.cameraController.setZoomSpeed(speed)
+      }
+    }
+    
     return {
       containerRef,
-      error
+      error,
+      threeView,
+      selectionCount,
+      cameraDistance,
+      fps,
+      rotateSpeed,
+      panSpeed,
+      zoomSpeed,
+      getThreeView,
+      addObject,
+      removeObject,
+      fitAll,
+      setView,
+      updateRotateSpeed,
+      updatePanSpeed,
+      updateZoomSpeed
     }
   }
 }
@@ -216,6 +325,67 @@ export default {
   text-align: center;
   font-family: Arial, sans-serif;
   z-index: 1000;
+}
+
+.debug-info {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 10px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  z-index: 1000;
+  min-width: 150px;
+  pointer-events: auto;
+}
+
+.debug-info div {
+  margin: 2px 0;
+}
+
+.sensitivity-controls {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  pointer-events: auto;
+  user-select: none;
+}
+
+.sensitivity-controls div {
+  display: flex;
+  align-items: center;
+  margin: 4px 0;
+}
+
+.sensitivity-controls label {
+  width: 50px;
+  font-size: 10px;
+}
+
+.sensitivity-controls input[type="range"] {
+  flex: 1;
+  margin: 0 8px;
+  height: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.sensitivity-controls input[type="range"]::-webkit-slider-thumb {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.sensitivity-controls input[type="range"]::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+
+.sensitivity-controls span {
+  width: 30px;
+  text-align: right;
+  font-size: 10px;
 }
 
 .three-container canvas {
