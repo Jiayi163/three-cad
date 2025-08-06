@@ -285,13 +285,13 @@ export class History extends Observable {
       const record = this._undos.pop()
       record.undo()
       this._redos.push(record)
-      this._updateProperties()
       return true
     } catch (error) {
       console.error('Error during undo operation:', error)
       return false
     } finally {
       this._disabled = false
+      this._updateProperties()
     }
   }
 
@@ -309,13 +309,13 @@ export class History extends Observable {
       const record = this._redos.pop()
       record.redo()
       this._undos.push(record)
-      this._updateProperties()
       return true
     } catch (error) {
       console.error('Error during redo operation:', error)
       return false
     } finally {
       this._disabled = false
+      this._updateProperties()
     }
   }
 

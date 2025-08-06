@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import { markRaw } from 'vue'
 import { Observable } from '../cad-core/foundation/Observable.js'
 import { CameraController } from './CameraController.js'
+import { VisualObject } from './VisualObject.js'
 
 export class ThreeView extends Observable {
   constructor(document, name = 'default') {
@@ -36,6 +37,7 @@ export class ThreeView extends Observable {
     
     // Scene objects
     this.visualObjects = new Map()  // Maps document nodes to Three.js objects
+    this.visualObjectInstances = new Map()  // Maps nodeId to VisualObject instances
     this.helpers = markRaw(new THREE.Group())  // Grid, axes, etc.
     this.overlays = markRaw(new THREE.Group())  // Selection highlights, etc.
     
@@ -455,6 +457,123 @@ export class ThreeView extends Observable {
   }
 
   /**
+   * Set up property change listeners for a VisualObject
+   * @param {VisualObject} visualObject - VisualObject to set up listeners for
+   * @private
+   */
+  _setupVisualObjectListeners(visualObject) {
+    // Listen for visibility changes
+    visualObject.onPropertyChanged('visible', (newValue) => {
+      const object3D = this.visualObjects.get(visualObject.nodeId)
+      if (object3D) {
+        object3D.visible = newValue
+        this.requestRender()
+      }
+    })
+    
+    // Listen for position changes
+    visualObject.onPropertyChanged('position', (newValue) => {
+      const object3D = this.visualObjects.get(visualObject.nodeId)
+      if (object3D && newValue) {
+        object3D.position.copy(newValue)
+        this.requestRender()
+      }
+    })
+    
+    // Listen for rotation changes
+    visualObject.onPropertyChanged('rotation', (newValue) => {
+      const object3D = this.visualObjects.get(visualObject.nodeId)
+      if (object3D && newValue) {
+        object3D.rotation.copy(newValue)
+        this.requestRender()
+      }
+    })
+    
+    // Listen for scale changes
+    visualObject.onPropertyChanged('scale', (newValue) => {
+      const object3D = this.visualObjects.get(visualObject.nodeId)
+      if (object3D && newValue) {
+        object3D.scale.copy(newValue)
+        this.requestRender()
+      }
+    })
+    
+    // Listen for selection changes
+    visualObject.onPropertyChanged('selected', (newValue) => {
+      const object3D = this.visualObjects.get(visualObject.nodeId)
+      if (object3D) {
+        if (newValue) {
+          this.selectedObjects.add(object3D)
+        } else {
+          this.selectedObjects.delete(object3D)
+        }
+        this._updateObjectMaterial(object3D)
+        this.requestRender()
+      }
+    })
+    
+    // Listen for highlight changes
+    visualObject.onPropertyChanged('highlighted', (newValue) => {
+      const object3D = this.visualObjects.get(visualObject.nodeId)
+      if (object3D) {
+        this._updateObjectMaterial(object3D)
+        this.requestRender()
+      }
+    })
+  }
+  
+  /**
+   * Remove property change listeners from a VisualObject
+   * @param {VisualObject} visualObject - VisualObject to remove listeners from
+   * @private
+   */
+  _removeVisualObjectListeners(visualObject) {
+    // Remove all listeners - VisualObject should handle this in dispose()
+    // This is a placeholder for any cleanup specific to ThreeView
+  }
+  
+  /**
+   * Update material for an object based on its visual state
+   * @param {THREE.Object3D} object3D - Object to update
+   * @private
+   */
+  _updateObjectMaterial(object3D) {
+    if (!object3D || !object3D.userData.visualObject) {
+      return
+    }
+    
+    const visualObject = object3D.userData.visualObject
+    
+    // Let the VisualObject handle its own material state
+    // This will trigger the internal _updateMaterialState method
+    if (visualObject instanceof VisualObject) {
+      // The VisualObject will handle material updates internally
+      // We just need to ensure the object3D gets the updated material
+      const currentMaterial = visualObject.material
+      if (currentMaterial && object3D.material !== currentMaterial) {
+        object3D.material = currentMaterial
+      }
+    }
+  }
+  
+  /**
+   * Get VisualObject instance by nodeId
+   * @param {string} nodeId - Node ID to look up
+   * @returns {VisualObject|null}
+   */
+  getVisualObjectInstance(nodeId) {
+    return this.visualObjectInstances.get(nodeId) || null
+  }
+  
+  /**
+   * Get all VisualObject instances
+   * @returns {Map<string, VisualObject>}
+   */
+  getAllVisualObjectInstances() {
+    return new Map(this.visualObjectInstances)
+  }
+  
+  /**
    * Update visual objects from document
    */
   _updateVisualObjects() {
@@ -534,7 +653,58 @@ export class ThreeView extends Observable {
   }
 
   /**
-   * Add a visual object to the scene
+   * Add a VisualObject instance to the scene
+   * @param {VisualObject} visualObject - VisualObject instance to add
+   * @returns {Promise<THREE.Object3D>}
+   */
+  async addVisualObjectInstance(visualObject) {
+    if (!(visualObject instanceof VisualObject)) {
+      throw new Error('Expected VisualObject instance')
+    }
+    
+    const nodeId = visualObject.nodeId
+    if (!nodeId) {
+      throw new Error('VisualObject must have a nodeId')
+    }
+    
+    // Remove existing object if present
+    if (this.visualObjectInstances.has(nodeId)) {
+      this.removeVisualObjectInstance(nodeId)
+    }
+    
+    try {
+      // Create the Three.js representation
+      const object3D = await visualObject.create()
+      
+      if (!object3D) {
+        throw new Error('VisualObject.create() returned null/undefined')
+      }
+      
+      // Mark as raw to prevent Vue reactivity
+      const rawObject = markRaw(object3D)
+      rawObject.userData.nodeId = nodeId
+      rawObject.userData.visualObject = visualObject
+      
+      // Store both the VisualObject instance and Three.js object
+      this.visualObjectInstances.set(nodeId, visualObject)
+      this.visualObjects.set(nodeId, rawObject)
+      
+      // Add to scene
+      this.scene.add(rawObject)
+      this.requestRender()
+      
+      // Set up property change listeners
+      this._setupVisualObjectListeners(visualObject)
+      
+      return rawObject
+    } catch (error) {
+      console.error('Failed to add VisualObject:', error)
+      throw error
+    }
+  }
+  
+  /**
+   * Add a visual object to the scene (legacy method for Three.js objects)
    */
   addVisualObject(nodeId, object3D) {
     if (this.visualObjects.has(nodeId)) {
@@ -550,9 +720,45 @@ export class ThreeView extends Observable {
   }
 
   /**
-   * Remove a visual object from the scene
+   * Remove a VisualObject instance from the scene
+   * @param {string} nodeId - Node ID of the object to remove
+   */
+  removeVisualObjectInstance(nodeId) {
+    const visualObject = this.visualObjectInstances.get(nodeId)
+    const object3D = this.visualObjects.get(nodeId)
+    
+    if (object3D) {
+      this.scene.remove(object3D)
+      this.visualObjects.delete(nodeId)
+      this.selectedObjects.delete(object3D)
+    }
+    
+    if (visualObject) {
+      this._removeVisualObjectListeners(visualObject)
+      this.visualObjectInstances.delete(nodeId)
+      
+      // Dispose the VisualObject
+      try {
+        visualObject.dispose()
+      } catch (error) {
+        console.error('Error disposing VisualObject:', error)
+      }
+    }
+    
+    this.requestRender()
+  }
+  
+  /**
+   * Remove a visual object from the scene (legacy method)
    */
   removeVisualObject(nodeId) {
+    // Try VisualObject removal first
+    if (this.visualObjectInstances.has(nodeId)) {
+      this.removeVisualObjectInstance(nodeId)
+      return
+    }
+    
+    // Fallback to legacy removal
     const object3D = this.visualObjects.get(nodeId)
     if (object3D) {
       this.scene.remove(object3D)
@@ -586,6 +792,18 @@ export class ThreeView extends Observable {
       
       if (this.cameraController) {
         this.cameraController.dispose()
+      }
+      
+      // Dispose all VisualObject instances
+      if (this.visualObjectInstances) {
+        this.visualObjectInstances.forEach(visualObject => {
+          try {
+            visualObject.dispose()
+          } catch (error) {
+            console.error('Error disposing VisualObject:', error)
+          }
+        })
+        this.visualObjectInstances.clear()
       }
       
       // Clear collections

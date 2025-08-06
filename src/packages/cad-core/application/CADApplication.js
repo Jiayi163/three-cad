@@ -51,8 +51,16 @@ export class CADApplication extends Observable {
     return this._documents;
   }
   
+  get documentCount() {
+    return this._documents.length;
+  }
+  
   get views() {
     return this._views;
+  }
+  
+  get viewCount() {
+    return this._views.length;
   }
   
   get activeDocument() {
@@ -116,10 +124,8 @@ export class CADApplication extends Observable {
     // Add to collection
     this._documents.add(document);
     
-    // Set as active if it's the first document
-    if (this._documents.length === 1) {
-      this.setActiveDocument(document);
-    }
+    // Always set new document as active (standard CAD behavior)
+    this.setActiveDocument(document);
     
     console.log(`Created new document: ${name}`);
     return document;
@@ -153,11 +159,18 @@ export class CADApplication extends Observable {
   }
   
   closeDocument(document) {
+    // Handle null input by using active document
     if (!document) {
       document = this._activeDocument;
     }
     
+    // Return false if no document to close
     if (!document) {
+      return false;
+    }
+    
+    // Check if the document is actually in our collection
+    if (!this._documents.contains(document)) {
       return false;
     }
     
@@ -170,10 +183,17 @@ export class CADApplication extends Observable {
     // Remove from collection
     const removed = this._documents.remove(document);
     
-    if (removed && document === this._activeDocument) {
+    if (!removed) {
+      return false;
+    }
+    
+    // Handle active document switching
+    if (document === this._activeDocument) {
       // Set new active document
       if (this._documents.length > 0) {
-        this.setActiveDocument(this._documents.get(0));
+        // Find the most recently created document (usually the last one)
+        let newActiveDocument = this._documents.get(this._documents.length - 1);
+        this.setActiveDocument(newActiveDocument);
       } else {
         this.setActiveDocument(null);
       }
@@ -236,10 +256,8 @@ export class CADApplication extends Observable {
     
     this._views.add(view);
     
-    // Set as active if it's the first view
-    if (this._views.length === 1) {
-      this.setActiveView(view);
-    }
+    // Always set new view as active (standard CAD behavior)
+    this.setActiveView(view);
     
     console.log(`Created view: ${name} for document: ${document.name}`);
     return view;
@@ -339,13 +357,24 @@ export class CADApplication extends Observable {
     const oldValue = this._settings.get(key);
     this._settings.set(key, value);
     
-    // Record in history for undo/redo
-    const record = this._globalHistory.createPropertyRecord(
-      this._settings,
-      key,
-      oldValue,
-      value
-    );
+    // Create a custom record for Map-based settings
+    const record = {
+      name: `Change setting ${key}`,
+      undo: () => {
+        if (oldValue === undefined) {
+          this._settings.delete(key);
+        } else {
+          this._settings.set(key, oldValue);
+        }
+      },
+      redo: () => {
+        this._settings.set(key, value);
+      },
+      dispose: () => {
+        // No cleanup needed
+      }
+    };
+    
     this._globalHistory.add(record);
     
     // Notify change
@@ -357,13 +386,20 @@ export class CADApplication extends Observable {
       const oldValue = this._settings.get(key);
       this._settings.delete(key);
       
-      // Record in history
-      const record = this._globalHistory.createPropertyRecord(
-        this._settings,
-        key,
-        oldValue,
-        undefined
-      );
+      // Create a custom record for Map-based settings
+      const record = {
+        name: `Remove setting ${key}`,
+        undo: () => {
+          this._settings.set(key, oldValue);
+        },
+        redo: () => {
+          this._settings.delete(key);
+        },
+        dispose: () => {
+          // No cleanup needed
+        }
+      };
+      
       this._globalHistory.add(record);
       
       this.notifyPropertyChanged(`setting.${key}`, oldValue, undefined);

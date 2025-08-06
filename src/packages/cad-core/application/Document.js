@@ -98,11 +98,11 @@ export class Document extends Observable {
   }
   
   get canUndo() {
-    return this.getProperty('canUndo');
+    return this._history.canUndo;
   }
   
   get canRedo() {
-    return this.getProperty('canRedo');
+    return this._history.canRedo;
   }
   
   get created() {
@@ -252,6 +252,11 @@ export class Document extends Observable {
   
   selectNode(node, addToSelection = false) {
     if (!node) return false;
+    
+    // If node is already selected and we're not adding to selection, return false
+    if (this._selectedNodes.contains(node) && !addToSelection) {
+      return false;
+    }
     
     if (!addToSelection) {
       this.clearSelection();
@@ -415,13 +420,23 @@ export class Document extends Observable {
     const oldValue = this._metadata.get(key);
     this._metadata.set(key, value);
     
-    // Record in history
-    const record = this._history.createPropertyRecord(
-      this._metadata,
-      key,
-      oldValue,
-      value
-    );
+    // Create a custom record for Map-based metadata
+    const record = {
+      name: `Change metadata ${key}`,
+      undo: () => {
+        if (oldValue === undefined) {
+          this._metadata.delete(key);
+        } else {
+          this._metadata.set(key, oldValue);
+        }
+      },
+      redo: () => {
+        this._metadata.set(key, value);
+      },
+      dispose: () => {
+        // No special cleanup needed for metadata records
+      }
+    };
     this._history.add(record);
     
     this._markModified();
@@ -433,13 +448,19 @@ export class Document extends Observable {
       const oldValue = this._metadata.get(key);
       this._metadata.delete(key);
       
-      // Record in history
-      const record = this._history.createPropertyRecord(
-        this._metadata,
-        key,
-        oldValue,
-        undefined
-      );
+      // Create a custom record for Map-based metadata
+      const record = {
+        name: `Remove metadata ${key}`,
+        undo: () => {
+          this._metadata.set(key, oldValue);
+        },
+        redo: () => {
+          this._metadata.delete(key);
+        },
+        dispose: () => {
+          // No special cleanup needed for metadata records
+        }
+      };
       this._history.add(record);
       
       this._markModified();

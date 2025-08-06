@@ -66,6 +66,7 @@ import { ref, onMounted, onUnmounted, computed, watch, markRaw } from 'vue'
 import { storeToRefs } from 'pinia'
 import * as THREE from 'three'
 import { ThreeView } from '../packages/cad-three/ThreeView.js'
+import { createVisualObject } from '../packages/cad-three/BasicShapes.js'
 import { useApplicationStore } from '../stores/application.js'
 
 export default {
@@ -147,8 +148,111 @@ export default {
       }
     }
     
-    const addDemoObjects = () => {
+    const addDemoObjects = async () => {
       if (!threeView.value) return
+      
+      try {
+        // Create a demo box using the new VisualObject system
+        const boxVisualObject = createVisualObject('box', 'demo-box', {
+          width: 2,
+          height: 2,
+          depth: 2
+        })
+        
+        // Set custom material colors
+        boxVisualObject.setMaterialConfig('default', {
+          color: 0x4CAF50,
+          metalness: 0.1,
+          roughness: 0.3
+        })
+        
+        // Set position and add to scene
+        boxVisualObject.position = { x: 0, y: 1, z: 0 }
+        const boxObject3D = await threeView.value.addVisualObjectInstance(boxVisualObject)
+        
+        // Add floating animation
+        const animateBox = () => {
+          if (boxObject3D && threeView.value && !boxVisualObject.disposed) {
+            const time = Date.now() * 0.002
+            boxVisualObject.rotation = {
+              x: time * 0.5,
+              y: time,
+              z: 0
+            }
+            boxVisualObject.position = {
+              x: 0,
+              y: 1 + Math.sin(time) * 0.5,
+              z: 0
+            }
+            threeView.value.requestRender()
+          }
+          requestAnimationFrame(animateBox)
+        }
+        animateBox()
+        
+        // Create a demo sphere
+        const sphereVisualObject = createVisualObject('sphere', 'demo-sphere', {
+          radius: 1,
+          widthSegments: 32,
+          heightSegments: 16
+        })
+        
+        sphereVisualObject.setMaterialConfig('default', {
+          color: 0x2196F3,
+          metalness: 0.2,
+          roughness: 0.4
+        })
+        
+        sphereVisualObject.position = { x: -4, y: 1, z: 0 }
+        await threeView.value.addVisualObjectInstance(sphereVisualObject)
+        
+        // Create a demo cylinder
+        const cylinderVisualObject = createVisualObject('cylinder', 'demo-cylinder', {
+          radiusTop: 1,
+          radiusBottom: 1,
+          height: 2,
+          radialSegments: 16
+        })
+        
+        cylinderVisualObject.setMaterialConfig('default', {
+          color: 0xFF9800,
+          metalness: 0.15,
+          roughness: 0.35
+        })
+        
+        cylinderVisualObject.position = { x: 4, y: 1, z: 0 }
+        await threeView.value.addVisualObjectInstance(cylinderVisualObject)
+        
+        // Create ground plane using VisualObject
+        const groundVisualObject = createVisualObject('plane', 'demo-ground', {
+          width: 20,
+          height: 20
+        })
+        
+        groundVisualObject.setMaterialConfig('default', {
+          color: 0x808080,
+          metalness: 0.1,
+          roughness: 0.8
+        })
+        
+        groundVisualObject.rotation = { x: -Math.PI / 2, y: 0, z: 0 }
+        groundVisualObject.position = { x: 0, y: -2, z: 0 }
+        await threeView.value.addVisualObjectInstance(groundVisualObject)
+        
+        console.log('Demo VisualObjects created successfully')
+        
+      } catch (error) {
+        console.error('Failed to create demo VisualObjects:', error)
+        
+        // Fallback to legacy objects if VisualObject system fails
+        addLegacyDemoObjects()
+      }
+    }
+    
+    const addLegacyDemoObjects = () => {
+      if (!threeView.value) return
+      
+      console.log('Using legacy demo objects as fallback')
       
       // Add a demo cube (similar to the original)
       const geometry = markRaw(new THREE.BoxGeometry(2, 2, 2))
@@ -235,6 +339,28 @@ export default {
     
     // Expose methods for external use
     const getThreeView = () => threeView.value
+    
+    // Enhanced methods for VisualObject support
+    const addVisualObjectInstance = async (visualObject) => {
+      if (threeView.value) {
+        return await threeView.value.addVisualObjectInstance(visualObject)
+      }
+    }
+    
+    const removeVisualObjectInstance = (nodeId) => {
+      if (threeView.value) {
+        threeView.value.removeVisualObjectInstance(nodeId)
+      }
+    }
+    
+    const getVisualObjectInstance = (nodeId) => {
+      if (threeView.value) {
+        return threeView.value.getVisualObjectInstance(nodeId)
+      }
+      return null
+    }
+    
+    // Legacy methods for Three.js objects
     const addObject = (nodeId, object3D) => {
       if (threeView.value) {
         threeView.value.addVisualObject(nodeId, object3D)
@@ -292,6 +418,9 @@ export default {
       panSpeed,
       zoomSpeed,
       getThreeView,
+      addVisualObjectInstance,
+      removeVisualObjectInstance,
+      getVisualObjectInstance,
       addObject,
       removeObject,
       fitAll,
