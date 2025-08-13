@@ -264,12 +264,16 @@ export class Document extends Observable {
     
     if (!this._selectedNodes.contains(node)) {
       this._selectedNodes.add(node);
-      node.selected = true;
+      
+      // Only set selected property if it's an actual node object
+      if (typeof node === 'object' && node !== null && node.hasOwnProperty('name')) {
+        node.selected = true;
+      }
       
       // Notify selection change
       this.notifyPropertyChanged('nodeSelected', null, node);
       
-      console.log(`Selected node: ${node.name}`);
+      console.log(`Selected node: ${node.name || node.id || node}`);
       return true;
     }
     
@@ -281,9 +285,12 @@ export class Document extends Observable {
     
     const removed = this._selectedNodes.remove(node);
     if (removed) {
-      node.selected = false;
+      // Only set selected property if it's an actual node object
+      if (typeof node === 'object' && node !== null && node.hasOwnProperty('name')) {
+        node.selected = false;
+      }
       this.notifyPropertyChanged('nodeDeselected', node, null);
-      console.log(`Deselected node: ${node.name}`);
+      console.log(`Deselected node: ${node.name || node.id || node}`);
     }
     
     return removed;
@@ -293,7 +300,10 @@ export class Document extends Observable {
     const selectedNodes = [...this._selectedNodes.items];
     
     selectedNodes.forEach(node => {
-      node.selected = false;
+      // Only set selected property if it's an actual node object
+      if (typeof node === 'object' && node !== null && node.hasOwnProperty('name')) {
+        node.selected = false;
+      }
     });
     
     this._selectedNodes.clear();

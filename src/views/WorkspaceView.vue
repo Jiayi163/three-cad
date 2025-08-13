@@ -1,84 +1,59 @@
 <template>
-  <div class="workspace">
-    <!-- Header with application status -->
-    <header class="workspace-header">
-      <div class="header-left">
-        <h1 class="app-title">CAD Application</h1>
-        <div class="document-info" v-if="activeDocument">
-          <span class="document-name">{{ activeDocument.name }}</span>
-          <span class="document-status" v-if="hasUnsavedChanges">*</span>
-          <span class="node-count">({{ activeDocument.nodeCount }} objects)</span>
+  <MainLayout
+    @menu-action="handleMenuAction"
+    @tool-change="handleToolChange"
+    @panel-toggle="handlePanelToggle"
+    @viewport-action="handleViewportAction"
+  >
+    <template #viewport>
+      <ThreeScene 
+        :showDebugInfo="isDevelopment" 
+        :activeTool="activeTool"
+        @object-created="handleObjectCreated"
+        @selection-changed="handleSelectionChanged"
+      />
+      
+      <!-- Viewport overlay for development -->
+      <div v-if="isDevelopment" class="viewport-overlay">
+        <div class="debug-info">
+          <p><strong>Development Debug Info:</strong></p>
+          <p>Documents: {{ documentCount }}</p>
+          <p>Views: {{ viewCount }}</p>
+          <p>Selected: {{ selectedCount }}</p>
+          <p>Active Tool: {{ activeTool }}</p>
+          <p v-if="error" class="error">Error: {{ error }}</p>
         </div>
-      </div>
-      <div class="header-right">
-        <div class="application-status">
-          <span class="status-indicator" :class="{ 'initialized': isInitialized, 'loading': isLoading }">
-            {{ isLoading ? 'Loading...' : isInitialized ? 'Ready' : 'Not Ready' }}
-          </span>
-        </div>
-        <div class="history-controls">
-          <button @click="undo" :disabled="!canUndo" class="history-btn">
-            ↶ Undo
+        
+        <div class="quick-actions">
+          <button @click="createNewDocument" class="action-btn">
+            + New Document
           </button>
-          <button @click="redo" :disabled="!canRedo" class="history-btn">
-            ↷ Redo
+          <button @click="addTestNode" :disabled="!hasActiveDocument" class="action-btn">
+            + Add Test Node
+          </button>
+          <button @click="clearSelection" :disabled="selectedCount === 0" class="action-btn">
+            Clear Selection
+          </button>
+          <button @click="showDebugInfo" class="action-btn">
+            Debug Info
           </button>
         </div>
       </div>
-    </header>
-
-    <main class="workspace-main">
-      <div class="viewport-container">
-        <ThreeScene :showDebugInfo="isDevelopment" />
-        <div class="viewport-overlay">
-          <div class="controls-hint">
-            <p><strong>Controls:</strong></p>
-            <p>Left click + drag: Rotate view</p>
-            <p>Right click + drag: Pan view</p>
-            <p>Mouse wheel: Zoom in/out</p>
-          </div>
-          
-          <!-- Application Debug Info (Development Only) -->
-          <div v-if="isDevelopment" class="debug-info">
-            <p><strong>Debug Info:</strong></p>
-            <p>Documents: {{ documentCount }}</p>
-            <p>Views: {{ viewCount }}</p>
-            <p>Selected: {{ selectedCount }}</p>
-            <p v-if="error" class="error">Error: {{ error }}</p>
-          </div>
-        </div>
-      </div>
-    </main>
-
-    <!-- Footer with quick actions (Development Only) -->
-    <footer v-if="isDevelopment" class="workspace-footer">
-      <div class="quick-actions">
-        <button @click="createNewDocument" class="action-btn">
-          + New Document
-        </button>
-        <button @click="addTestNode" :disabled="!hasActiveDocument" class="action-btn">
-          + Add Test Node
-        </button>
-        <button @click="clearSelection" :disabled="selectedCount === 0" class="action-btn">
-          Clear Selection
-        </button>
-        <button @click="showDebugInfo" class="action-btn">
-          Debug Info
-        </button>
-      </div>
-    </footer>
-  </div>
+    </template>
+  </MainLayout>
 </template>
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useApplicationStore } from '../stores/application.js'
+import MainLayout from '../components/layout/MainLayout.vue'
 import ThreeScene from '../components/ThreeScene.vue'
 
 export default {
   name: 'WorkspaceView',
   components: {
+    MainLayout,
     ThreeScene
   },
   setup() {
@@ -86,6 +61,9 @@ export default {
     
     // Development mode detection
     const isDevelopment = computed(() => import.meta.env.DEV)
+    
+    // Local state
+    const activeTool = ref('select')
     
     // Reactive state from store (using storeToRefs to maintain reactivity)
     const {
@@ -186,6 +164,98 @@ export default {
       console.log('Active Document:', debugInfo.activeDocument)
       console.log('=====================================')
     }
+
+    // New event handlers for MainLayout
+    const handleMenuAction = (action) => {
+      console.log('Menu action:', action)
+      
+      switch (action) {
+        case 'new':
+          createNewDocument()
+          break
+        case 'save':
+          if (hasActiveDocument.value) {
+            console.log('Saving document:', activeDocument.value.name)
+            // TODO: Implement actual save functionality
+          }
+          break
+        case 'open':
+          console.log('Open document dialog')
+          // TODO: Implement file open dialog
+          break
+        case 'export':
+          console.log('Export dialog')
+          // TODO: Implement export functionality
+          break
+        case 'copy':
+          console.log('Copy selected objects')
+          // TODO: Implement copy functionality
+          break
+        case 'paste':
+          console.log('Paste objects')
+          // TODO: Implement paste functionality
+          break
+        case 'delete':
+          console.log('Delete selected objects')
+          // TODO: Implement delete functionality
+          break
+        case 'zoom-fit':
+          console.log('Zoom to fit')
+          // TODO: Implement zoom to fit
+          break
+        case 'view-front':
+        case 'view-top':
+        case 'view-iso':
+          console.log('View preset:', action)
+          // TODO: Implement view presets
+          break
+        default:
+          console.log('Unhandled menu action:', action)
+          break
+      }
+    }
+
+    const handleToolChange = (tool) => {
+      console.log('Tool changed to:', tool)
+      activeTool.value = tool
+    }
+
+    const handlePanelToggle = (panel) => {
+      console.log('Panel toggled:', panel)
+      // TODO: Implement panel state management
+    }
+
+    const handleViewportAction = (action) => {
+      console.log('Viewport action:', action)
+      
+      switch (action) {
+        case 'toggle-wireframe':
+          console.log('Toggle wireframe mode')
+          // TODO: Implement wireframe toggle
+          break
+        case 'toggle-grid':
+          console.log('Toggle grid display')
+          // TODO: Implement grid toggle
+          break
+        case 'toggle-axes':
+          console.log('Toggle axes display')
+          // TODO: Implement axes toggle
+          break
+        default:
+          console.log('Unhandled viewport action:', action)
+          break
+      }
+    }
+
+    const handleObjectCreated = (objectData) => {
+      console.log('Object created:', objectData)
+      // The object creation is handled by ThreeScene and the visual object system
+    }
+
+    const handleSelectionChanged = (selection) => {
+      console.log('Selection changed:', selection)
+      // The selection is managed by the document system
+    }
     
     return {
       // State
@@ -201,6 +271,7 @@ export default {
       selectedCount,
       canUndo,
       canRedo,
+      activeTool,
       
       // Actions
       undo,
@@ -208,249 +279,119 @@ export default {
       createNewDocument,
       addTestNode,
       clearSelection,
-      showDebugInfo
+      showDebugInfo,
+      
+      // New event handlers
+      handleMenuAction,
+      handleToolChange,
+      handlePanelToggle,
+      handleViewportAction,
+      handleObjectCreated,
+      handleSelectionChanged
     }
   }
 }
 </script>
 
 <style scoped>
-.workspace {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: #2c3e50;
-  color: #ecf0f1;
-}
-
-/* Header Styles */
-.workspace-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  background: #34495e;
-  border-bottom: 1px solid #4a5f7a;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.app-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-  color: #3498db;
-}
-
-.document-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-}
-
-.document-name {
-  font-weight: 500;
-}
-
-.document-status {
-  color: #e74c3c;
-  font-weight: bold;
-}
-
-.node-count {
-  color: #95a5a6;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.status-indicator {
-  padding: 0.25rem 0.75rem;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  background: #e74c3c;
-  color: white;
-}
-
-.status-indicator.loading {
-  background: #f39c12;
-}
-
-.status-indicator.initialized {
-  background: #27ae60;
-}
-
-.history-controls {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.history-btn {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #4a5f7a;
-  background: #2c3e50;
-  color: #ecf0f1;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: all 0.2s ease;
-}
-
-.history-btn:hover:not(:disabled) {
-  background: #34495e;
-  border-color: #3498db;
-}
-
-.history-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Main Content */
-.workspace-main {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-}
-
-.viewport-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
+/* Viewport overlay for development debug info */
 .viewport-overlay {
   position: absolute;
   top: 1rem;
   right: 1rem;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.9);
   border-radius: 8px;
   padding: 1rem;
-  font-size: 0.85rem;
-  color: #ecf0f1;
+  font-size: 0.8rem;
+  color: #ffffff;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   z-index: 100;
   max-width: 280px;
-}
-
-.controls-hint p {
-  margin-bottom: 0.5rem;
-  line-height: 1.4;
-}
-
-.controls-hint p:last-child {
-  margin-bottom: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .debug-info {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .debug-info p {
   margin-bottom: 0.25rem;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
 }
 
 .debug-info .error {
-  color: #e74c3c;
+  color: #ff6b6b;
   font-weight: 500;
-}
-
-/* Footer Styles */
-.workspace-footer {
-  padding: 0.75rem 1rem;
-  background: #34495e;
-  border-top: 1px solid #4a5f7a;
 }
 
 .quick-actions {
   display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .action-btn {
-  padding: 0.5rem 1rem;
-  border: 1px solid #3498db;
-  background: transparent;
-  color: #3498db;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #007acc;
+  background: rgba(0, 122, 204, 0.1);
+  color: #007acc;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   transition: all 0.2s ease;
+  text-align: center;
 }
 
 .action-btn:hover:not(:disabled) {
-  background: #3498db;
+  background: #007acc;
   color: white;
 }
 
 .action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  border-color: #95a5a6;
-  color: #95a5a6;
+  border-color: #666666;
+  color: #666666;
 }
 
-/* Responsive design */
+/* Responsive design for development overlay */
 @media (max-width: 768px) {
-  .workspace-header {
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: stretch;
-  }
-  
-  .header-left,
-  .header-right {
-    justify-content: center;
-  }
-  
   .viewport-overlay {
     top: 0.5rem;
     right: 0.5rem;
     padding: 0.75rem;
-    font-size: 0.8rem;
-    max-width: 220px;
+    font-size: 0.7rem;
+    max-width: 200px;
   }
   
-  .quick-actions {
-    justify-content: center;
+  .action-btn {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.7rem;
   }
 }
 
 @media (max-width: 480px) {
-  .app-title {
-    font-size: 1rem;
-  }
-  
   .viewport-overlay {
     position: relative;
     top: auto;
     right: auto;
     margin: 0.5rem;
     max-width: none;
+    width: calc(100% - 1rem);
   }
   
-  .history-controls {
-    flex-direction: column;
-    width: 100%;
+  .quick-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
   
-  .history-btn {
-    width: 100%;
+  .action-btn {
+    flex: 1;
+    min-width: calc(50% - 0.25rem);
   }
 }
 </style> 
