@@ -4,17 +4,21 @@
     @tool-change="handleToolChange"
     @panel-toggle="handlePanelToggle"
     @viewport-action="handleViewportAction"
+    @show-dev-debug="showDevDebugPanel = $event"
   >
     <template #viewport>
-      <ThreeScene 
-        :showDebugInfo="isDevelopment" 
+      <ThreeScene
+        :showDebugInfo="showDebugInfo"
         :activeTool="activeTool"
         @object-created="handleObjectCreated"
         @selection-changed="handleSelectionChanged"
       />
-      
-      <!-- Viewport overlay for development -->
-      <div v-if="isDevelopment" class="viewport-overlay">
+
+      <!-- Development Debug Panel (Hidden by default) -->
+      <div
+        v-if="isDevelopment && showDevDebugPanel"
+        class="dev-debug-overlay"
+      >
         <div class="debug-info">
           <p><strong>Development Debug Info:</strong></p>
           <p>Documents: {{ documentCount }}</p>
@@ -23,7 +27,7 @@
           <p>Active Tool: {{ activeTool }}</p>
           <p v-if="error" class="error">Error: {{ error }}</p>
         </div>
-        
+
         <div class="quick-actions">
           <button @click="createNewDocument" class="action-btn">
             + New Document
@@ -34,7 +38,7 @@
           <button @click="clearSelection" :disabled="selectedCount === 0" class="action-btn">
             Clear Selection
           </button>
-          <button @click="showDebugInfo" class="action-btn">
+          <button @click="printDebugInfo" class="action-btn">
             Debug Info
           </button>
         </div>
@@ -58,13 +62,15 @@ export default {
   },
   setup() {
     const appStore = useApplicationStore()
-    
-    // Development mode detection
+
+    // Development mode detection and debug control
     const isDevelopment = computed(() => import.meta.env.DEV)
-    
+    const showDebugInfo = ref(true) // Always show debug panel, but with hover effect
+    const showDevDebugPanel = ref(false) // Control development debug panel visibility
+
     // Local state
     const activeTool = ref('select')
-    
+
     // Reactive state from store (using storeToRefs to maintain reactivity)
     const {
       isInitialized,
@@ -79,7 +85,7 @@ export default {
       canUndo,
       canRedo
     } = storeToRefs(appStore)
-    
+
     // Initialize application on mount
     onMounted(async () => {
       if (!isInitialized.value) {
@@ -97,12 +103,12 @@ export default {
         }
       }
     })
-    
+
     // Cleanup on unmount
     onUnmounted(() => {
       // Store cleanup is handled by the store itself
     })
-    
+
     // Action methods
     const undo = () => {
       try {
@@ -111,7 +117,7 @@ export default {
         console.error('Undo failed:', err)
       }
     }
-    
+
     const redo = () => {
       try {
         appStore.redo()
@@ -119,7 +125,7 @@ export default {
         console.error('Redo failed:', err)
       }
     }
-    
+
     const createNewDocument = async () => {
       try {
         const name = `Document ${documentCount.value + 1}`
@@ -129,7 +135,7 @@ export default {
         console.error('Failed to create document:', err)
       }
     }
-    
+
     const addTestNode = () => {
       try {
         const nodeData = {
@@ -146,7 +152,7 @@ export default {
         console.error('Failed to add test node:', err)
       }
     }
-    
+
     const clearSelection = () => {
       try {
         appStore.clearSelection()
@@ -155,8 +161,8 @@ export default {
         console.error('Failed to clear selection:', err)
       }
     }
-    
-    const showDebugInfo = () => {
+
+    const printDebugInfo = () => {
       const debugInfo = appStore.getDebugInfo()
       console.log('=== CAD Application Debug Info ===')
       console.log('Store:', debugInfo.store)
@@ -168,7 +174,7 @@ export default {
     // New event handlers for MainLayout
     const handleMenuAction = (action) => {
       console.log('Menu action:', action)
-      
+
       switch (action) {
         case 'new':
           createNewDocument()
@@ -209,15 +215,63 @@ export default {
           console.log('View preset:', action)
           // TODO: Implement view presets
           break
+        case 'toggle-debug':
+          showDebugInfo.value = !showDebugInfo.value
+          console.log('Debug info toggled:', showDebugInfo.value)
+          break
         default:
           console.log('Unhandled menu action:', action)
           break
       }
     }
 
-    const handleToolChange = (tool) => {
+    const handleToolChange = async (tool) => {
       console.log('Tool changed to:', tool)
       activeTool.value = tool
+
+      // Start interactive command for geometry creation tools
+      try {
+        switch (tool) {
+          case 'box':
+            console.log('Starting interactive box creation...')
+            // Start the interactive BoxCommand
+            const boxResult = await appStore.executeCommand('create-box')
+            console.log('Interactive box creation completed:', boxResult)
+            break
+
+          case 'sphere':
+            console.log('Starting interactive sphere creation...')
+            // Start the interactive SphereCommand
+            const sphereResult = await appStore.executeCommand('create-sphere')
+            console.log('Interactive sphere creation completed:', sphereResult)
+            break
+
+          case 'cylinder':
+            console.log('Cylinder tool selected - Interactive command not yet implemented')
+            console.log('Tool selected: Cylinder - Interactive command will be implemented in Phase 5.2')
+            break
+
+          case 'plane':
+            console.log('Plane tool selected - Interactive command not yet implemented')
+            console.log('Tool selected: Plane - Interactive command will be implemented in Phase 5.2')
+            break
+
+          case 'select':
+          case 'move':
+          case 'rotate':
+          case 'scale':
+            console.log(`${tool} tool activated - Interactive mode`)
+            console.log(`Tool selected: ${tool.charAt(0).toUpperCase() + tool.slice(1)} - Interactive mode active`)
+            break
+
+          default:
+            console.log(`Unknown tool: ${tool}`)
+            break
+        }
+      } catch (error) {
+        console.error(`Failed to start interactive command for tool ${tool}:`, error)
+        console.log(`Tool selected: ${tool} - Command execution failed`)
+      }
     }
 
     const handlePanelToggle = (panel) => {
@@ -227,7 +281,7 @@ export default {
 
     const handleViewportAction = (action) => {
       console.log('Viewport action:', action)
-      
+
       switch (action) {
         case 'toggle-wireframe':
           console.log('Toggle wireframe mode')
@@ -256,10 +310,12 @@ export default {
       console.log('Selection changed:', selection)
       // The selection is managed by the document system
     }
-    
+
     return {
       // State
       isDevelopment,
+      showDebugInfo,
+      showDevDebugPanel,
       isInitialized,
       isLoading,
       error,
@@ -272,15 +328,15 @@ export default {
       canUndo,
       canRedo,
       activeTool,
-      
+
       // Actions
       undo,
       redo,
       createNewDocument,
       addTestNode,
       clearSelection,
-      showDebugInfo,
-      
+      printDebugInfo,
+
       // New event handlers
       handleMenuAction,
       handleToolChange,
@@ -294,11 +350,11 @@ export default {
 </script>
 
 <style scoped>
-/* Viewport overlay for development debug info */
-.viewport-overlay {
+/* Development debug overlay (hover-triggered) */
+.dev-debug-overlay {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  bottom: 2rem;
+  left: 1rem;
   background: rgba(0, 0, 0, 0.9);
   border-radius: 8px;
   padding: 1rem;
@@ -309,6 +365,18 @@ export default {
   z-index: 100;
   max-width: 280px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .debug-info {
@@ -367,7 +435,7 @@ export default {
     font-size: 0.7rem;
     max-width: 200px;
   }
-  
+
   .action-btn {
     padding: 0.3rem 0.6rem;
     font-size: 0.7rem;
@@ -383,15 +451,15 @@ export default {
     max-width: none;
     width: calc(100% - 1rem);
   }
-  
+
   .quick-actions {
     flex-direction: row;
     flex-wrap: wrap;
   }
-  
+
   .action-btn {
     flex: 1;
     min-width: calc(50% - 0.25rem);
   }
 }
-</style> 
+</style>

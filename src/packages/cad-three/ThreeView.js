@@ -11,36 +11,36 @@ import { VisualObject } from './VisualObject.js'
 export class ThreeView extends Observable {
   constructor(document, name = 'default') {
     super()
-    
+
     // Core properties
     this.document = document
     this.name = name
     this.element = null
     this.isInitialized = false
-    
+
     // Three.js components
     this.scene = null
     this.camera = null
     this.renderer = null
     this.cameraController = null
-    
+
     // Rendering
     this.needsRender = true
     this.isRendering = false
     this.animationId = null
-    
+
     // Interaction
     this.raycaster = markRaw(new THREE.Raycaster())
     this.mouse = markRaw(new THREE.Vector2())
     this.selectedObjects = new Set()
     this.hoveredObject = null
-    
+
     // Scene objects
     this.visualObjects = new Map()  // Maps document nodes to Three.js objects
     this.visualObjectInstances = new Map()  // Maps nodeId to VisualObject instances
     this.helpers = markRaw(new THREE.Group())  // Grid, axes, etc.
     this.overlays = markRaw(new THREE.Group())  // Selection highlights, etc.
-    
+
     // Settings
     this.settings = {
       backgroundColor: markRaw(new THREE.Color(0x222222)),
@@ -49,7 +49,7 @@ export class ThreeView extends Observable {
       enableShadows: true,
       antialias: true
     }
-    
+
     // Bind event handlers once
     this._boundMouseMove = this._onMouseMove.bind(this)
     this._boundMouseDown = this._onMouseDown.bind(this)
@@ -72,7 +72,7 @@ export class ThreeView extends Observable {
       // Create scene - use markRaw to prevent Vue reactivity
       this.scene = markRaw(new THREE.Scene())
       this.scene.background = this.settings.backgroundColor
-      
+
       // Create camera - use markRaw to prevent Vue reactivity
       this.camera = markRaw(new THREE.PerspectiveCamera(
         75, // FOV
@@ -82,7 +82,7 @@ export class ThreeView extends Observable {
       ))
       this.camera.position.set(5, 5, 5)
       this.camera.lookAt(0, 0, 0)
-      
+
       // Create renderer - use markRaw to prevent Vue reactivity
       this.renderer = markRaw(new THREE.WebGLRenderer({
         antialias: this.settings.antialias,
@@ -91,22 +91,22 @@ export class ThreeView extends Observable {
       this.renderer.setPixelRatio(window.devicePixelRatio)
       this.renderer.shadowMap.enabled = this.settings.enableShadows
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
-      
+
       // Create camera controller
       this.cameraController = new CameraController(this)
-      
+
       // Add helper groups to scene
       this.scene.add(this.helpers)
       this.scene.add(this.overlays)
-      
+
       // Setup lighting
       this._setupLighting()
-      
+
       // Setup helpers
       this._setupHelpers()
-      
+
       this.setProperty('isInitialized', true)
-      
+
     } catch (error) {
       console.error('Failed to initialize ThreeView:', error)
       this.setProperty('error', error.message)
@@ -120,7 +120,7 @@ export class ThreeView extends Observable {
     // Ambient light
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4)
     this.scene.add(ambientLight)
-    
+
     // Main directional light
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
     directionalLight.position.set(10, 10, 10)
@@ -134,7 +134,7 @@ export class ThreeView extends Observable {
     directionalLight.shadow.camera.top = 10
     directionalLight.shadow.camera.bottom = -10
     this.scene.add(directionalLight)
-    
+
     // Fill light
     const fillLight = new THREE.DirectionalLight(0xffffff, 0.3)
     fillLight.position.set(-5, 0, -5)
@@ -149,7 +149,7 @@ export class ThreeView extends Observable {
       const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x333333)
       this.helpers.add(gridHelper)
     }
-    
+
     if (this.settings.showAxes) {
       const axesHelper = new THREE.AxesHelper(5)
       this.helpers.add(axesHelper)
@@ -165,7 +165,7 @@ export class ThreeView extends Observable {
       this.document.onPropertyChanged('nodes', () => {
         this._updateVisualObjects()
       })
-      
+
       this.document.onPropertyChanged('selection', () => {
         this._updateSelection()
       })
@@ -178,28 +178,28 @@ export class ThreeView extends Observable {
    */
   setDom(element) {
     if (this.element === element) return
-    
+
     // Clean up previous element
     if (this.element && this.renderer) {
       this.element.removeChild(this.renderer.domElement)
       this._removeEventListeners()
     }
-    
+
     this.element = element
-    
+
     if (element && this.renderer) {
       // Attach renderer to new element
       element.appendChild(this.renderer.domElement)
-      
+
       // Update size
       this._updateSize()
-      
+
       // Setup DOM event listeners
       this._addEventListeners()
-      
+
       // Start render loop
       this._startRenderLoop()
-      
+
       this.setProperty('isAttached', true)
     } else {
       this.setProperty('isAttached', false)
@@ -211,14 +211,14 @@ export class ThreeView extends Observable {
    */
   _updateSize() {
     if (!this.element || !this.renderer || !this.camera) return
-    
+
     const width = this.element.clientWidth
     const height = this.element.clientHeight
-    
+
     if (width > 0 && height > 0) {
       this.camera.aspect = width / height
       this.camera.updateProjectionMatrix()
-      
+
       this.renderer.setSize(width, height)
       this.needsRender = true
     }
@@ -229,14 +229,14 @@ export class ThreeView extends Observable {
    */
   _addEventListeners() {
     if (!this.element) return
-    
+
     this.element.addEventListener('mousemove', this._boundMouseMove)
     this.element.addEventListener('mousedown', this._boundMouseDown)
     this.element.addEventListener('mouseup', this._boundMouseUp)
     this.element.addEventListener('click', this._boundClick)
     this.element.addEventListener('contextmenu', this._boundContextMenu)
     this.element.addEventListener('wheel', this._boundWheel)
-    
+
     window.addEventListener('resize', this._boundResize)
   }
 
@@ -245,14 +245,14 @@ export class ThreeView extends Observable {
    */
   _removeEventListeners() {
     if (!this.element) return
-    
+
     this.element.removeEventListener('mousemove', this._boundMouseMove)
     this.element.removeEventListener('mousedown', this._boundMouseDown)
     this.element.removeEventListener('mouseup', this._boundMouseUp)
     this.element.removeEventListener('click', this._boundClick)
     this.element.removeEventListener('contextmenu', this._boundContextMenu)
     this.element.removeEventListener('wheel', this._boundWheel)
-    
+
     window.removeEventListener('resize', this._boundResize)
   }
 
@@ -261,15 +261,15 @@ export class ThreeView extends Observable {
    */
   _onMouseMove(event) {
     this._updateMousePosition(event)
-    
+
     // Update hover
     const intersections = this._raycastFromMouse()
     const newHovered = intersections.length > 0 ? intersections[0].object : null
-    
+
     if (this.hoveredObject !== newHovered) {
       this._setHoveredObject(newHovered)
     }
-    
+
     // Notify camera controller
     if (this.cameraController) {
       this.cameraController._onMouseMove(event)
@@ -299,7 +299,7 @@ export class ThreeView extends Observable {
    */
   _onClick(event) {
     const intersections = this._raycastFromMouse()
-    
+
     if (intersections.length > 0) {
       const object = intersections[0].object
       this._selectObject(object, event.ctrlKey || event.metaKey)
@@ -340,7 +340,7 @@ export class ThreeView extends Observable {
    */
   _updateMousePosition(event) {
     if (!this.element) return
-    
+
     const rect = this.element.getBoundingClientRect()
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
@@ -351,7 +351,7 @@ export class ThreeView extends Observable {
    */
   _raycastFromMouse() {
     if (!this.camera || !this.scene) return []
-    
+
     this.raycaster.setFromCamera(this.mouse, this.camera)
     return this.raycaster.intersectObjects(this.scene.children, true)
   }
@@ -361,14 +361,14 @@ export class ThreeView extends Observable {
    */
   rayAt(screenX, screenY) {
     if (!this.element || !this.camera) return null
-    
+
     const rect = this.element.getBoundingClientRect()
     const x = ((screenX - rect.left) / rect.width) * 2 - 1
     const y = -((screenY - rect.top) / rect.height) * 2 + 1
-    
+
     const ray = new THREE.Raycaster()
     ray.setFromCamera(new THREE.Vector2(x, y), this.camera)
-    
+
     return ray
   }
 
@@ -380,14 +380,14 @@ export class ThreeView extends Observable {
     if (this.hoveredObject) {
       this._setObjectHover(this.hoveredObject, false)
     }
-    
+
     this.hoveredObject = object
-    
+
     // Set new hover
     if (object) {
       this._setObjectHover(object, true)
     }
-    
+
     this.needsRender = true
   }
 
@@ -398,17 +398,18 @@ export class ThreeView extends Observable {
     if (!multiSelect) {
       this._clearSelection()
     }
-    
+
     if (object && !this.selectedObjects.has(object)) {
       this.selectedObjects.add(object)
       this._setObjectSelected(object, true)
-      
+
       // Update document selection if possible
-      if (this.document && object.userData.nodeId) {
+      // Skip demo objects as they are not real document nodes
+      if (this.document && object.userData.nodeId && !object.userData.nodeId.startsWith('demo-')) {
         this.document.selectNode(object.userData.nodeId, multiSelect)
       }
     }
-    
+
     this.needsRender = true
     this.setProperty('selectionCount', this.selectedObjects.size)
   }
@@ -421,11 +422,11 @@ export class ThreeView extends Observable {
       this._setObjectSelected(object, false)
     })
     this.selectedObjects.clear()
-    
+
     if (this.document) {
       this.document.clearSelection()
     }
-    
+
     this.needsRender = true
     this.setProperty('selectionCount', 0)
   }
@@ -470,7 +471,7 @@ export class ThreeView extends Observable {
         this.requestRender()
       }
     })
-    
+
     // Listen for position changes
     visualObject.onPropertyChanged('position', (newValue) => {
       const object3D = this.visualObjects.get(visualObject.nodeId)
@@ -479,7 +480,7 @@ export class ThreeView extends Observable {
         this.requestRender()
       }
     })
-    
+
     // Listen for rotation changes
     visualObject.onPropertyChanged('rotation', (newValue) => {
       const object3D = this.visualObjects.get(visualObject.nodeId)
@@ -488,7 +489,7 @@ export class ThreeView extends Observable {
         this.requestRender()
       }
     })
-    
+
     // Listen for scale changes
     visualObject.onPropertyChanged('scale', (newValue) => {
       const object3D = this.visualObjects.get(visualObject.nodeId)
@@ -497,7 +498,7 @@ export class ThreeView extends Observable {
         this.requestRender()
       }
     })
-    
+
     // Listen for selection changes
     visualObject.onPropertyChanged('selected', (newValue) => {
       const object3D = this.visualObjects.get(visualObject.nodeId)
@@ -511,7 +512,7 @@ export class ThreeView extends Observable {
         this.requestRender()
       }
     })
-    
+
     // Listen for highlight changes
     visualObject.onPropertyChanged('highlighted', (newValue) => {
       const object3D = this.visualObjects.get(visualObject.nodeId)
@@ -521,7 +522,7 @@ export class ThreeView extends Observable {
       }
     })
   }
-  
+
   /**
    * Remove property change listeners from a VisualObject
    * @param {VisualObject} visualObject - VisualObject to remove listeners from
@@ -531,7 +532,7 @@ export class ThreeView extends Observable {
     // Remove all listeners - VisualObject should handle this in dispose()
     // This is a placeholder for any cleanup specific to ThreeView
   }
-  
+
   /**
    * Update material for an object based on its visual state
    * @param {THREE.Object3D} object3D - Object to update
@@ -541,9 +542,9 @@ export class ThreeView extends Observable {
     if (!object3D || !object3D.userData.visualObject) {
       return
     }
-    
+
     const visualObject = object3D.userData.visualObject
-    
+
     // Let the VisualObject handle its own material state
     // This will trigger the internal _updateMaterialState method
     if (visualObject instanceof VisualObject) {
@@ -555,7 +556,7 @@ export class ThreeView extends Observable {
       }
     }
   }
-  
+
   /**
    * Get VisualObject instance by nodeId
    * @param {string} nodeId - Node ID to look up
@@ -564,7 +565,7 @@ export class ThreeView extends Observable {
   getVisualObjectInstance(nodeId) {
     return this.visualObjectInstances.get(nodeId) || null
   }
-  
+
   /**
    * Get all VisualObject instances
    * @returns {Map<string, VisualObject>}
@@ -572,7 +573,7 @@ export class ThreeView extends Observable {
   getAllVisualObjectInstances() {
     return new Map(this.visualObjectInstances)
   }
-  
+
   /**
    * Update visual objects from document
    */
@@ -593,7 +594,7 @@ export class ThreeView extends Observable {
    */
   _startRenderLoop() {
     if (this.isRendering) return
-    
+
     this.isRendering = true
     this._renderLoop()
   }
@@ -614,14 +615,14 @@ export class ThreeView extends Observable {
    */
   _renderLoop() {
     if (!this.isRendering) return
-    
+
     this.animationId = requestAnimationFrame(() => this._renderLoop())
-    
+
     // Update camera controller
     if (this.cameraController) {
       this.cameraController.update()
     }
-    
+
     // Render if needed
     if (this.needsRender) {
       this._render()
@@ -634,7 +635,7 @@ export class ThreeView extends Observable {
    */
   _render() {
     if (!this.renderer || !this.scene || !this.camera) return
-    
+
     try {
       // Ensure camera matrix is updated
       this.camera.updateMatrixWorld()
@@ -661,48 +662,48 @@ export class ThreeView extends Observable {
     if (!(visualObject instanceof VisualObject)) {
       throw new Error('Expected VisualObject instance')
     }
-    
+
     const nodeId = visualObject.nodeId
     if (!nodeId) {
       throw new Error('VisualObject must have a nodeId')
     }
-    
+
     // Remove existing object if present
     if (this.visualObjectInstances.has(nodeId)) {
       this.removeVisualObjectInstance(nodeId)
     }
-    
+
     try {
       // Create the Three.js representation
       const object3D = await visualObject.create()
-      
+
       if (!object3D) {
         throw new Error('VisualObject.create() returned null/undefined')
       }
-      
+
       // Mark as raw to prevent Vue reactivity
       const rawObject = markRaw(object3D)
       rawObject.userData.nodeId = nodeId
       rawObject.userData.visualObject = visualObject
-      
+
       // Store both the VisualObject instance and Three.js object
       this.visualObjectInstances.set(nodeId, visualObject)
       this.visualObjects.set(nodeId, rawObject)
-      
+
       // Add to scene
       this.scene.add(rawObject)
       this.requestRender()
-      
+
       // Set up property change listeners
       this._setupVisualObjectListeners(visualObject)
-      
+
       return rawObject
     } catch (error) {
       console.error('Failed to add VisualObject:', error)
       throw error
     }
   }
-  
+
   /**
    * Add a visual object to the scene (legacy method for Three.js objects)
    */
@@ -710,7 +711,7 @@ export class ThreeView extends Observable {
     if (this.visualObjects.has(nodeId)) {
       this.removeVisualObject(nodeId)
     }
-    
+
     // Mark the object as raw to prevent Vue reactivity
     const rawObject = markRaw(object3D)
     rawObject.userData.nodeId = nodeId
@@ -726,17 +727,17 @@ export class ThreeView extends Observable {
   removeVisualObjectInstance(nodeId) {
     const visualObject = this.visualObjectInstances.get(nodeId)
     const object3D = this.visualObjects.get(nodeId)
-    
+
     if (object3D) {
       this.scene.remove(object3D)
       this.visualObjects.delete(nodeId)
       this.selectedObjects.delete(object3D)
     }
-    
+
     if (visualObject) {
       this._removeVisualObjectListeners(visualObject)
       this.visualObjectInstances.delete(nodeId)
-      
+
       // Dispose the VisualObject
       try {
         visualObject.dispose()
@@ -744,10 +745,10 @@ export class ThreeView extends Observable {
         console.error('Error disposing VisualObject:', error)
       }
     }
-    
+
     this.requestRender()
   }
-  
+
   /**
    * Remove a visual object from the scene (legacy method)
    */
@@ -757,7 +758,7 @@ export class ThreeView extends Observable {
       this.removeVisualObjectInstance(nodeId)
       return
     }
-    
+
     // Fallback to legacy removal
     const object3D = this.visualObjects.get(nodeId)
     if (object3D) {
@@ -774,7 +775,7 @@ export class ThreeView extends Observable {
   dispose() {
     try {
       this._stopRenderLoop()
-      
+
       if (this.element && this.renderer && this.renderer.domElement) {
         try {
           this.element.removeChild(this.renderer.domElement)
@@ -783,17 +784,17 @@ export class ThreeView extends Observable {
           console.warn('Could not remove renderer DOM element:', e)
         }
       }
-      
+
       this._removeEventListeners()
-      
+
       if (this.renderer) {
         this.renderer.dispose()
       }
-      
+
       if (this.cameraController) {
         this.cameraController.dispose()
       }
-      
+
       // Dispose all VisualObject instances
       if (this.visualObjectInstances) {
         this.visualObjectInstances.forEach(visualObject => {
@@ -805,7 +806,7 @@ export class ThreeView extends Observable {
         })
         this.visualObjectInstances.clear()
       }
-      
+
       // Clear collections
       if (this.visualObjects) {
         this.visualObjects.clear()
@@ -813,7 +814,7 @@ export class ThreeView extends Observable {
       if (this.selectedObjects) {
         this.selectedObjects.clear()
       }
-      
+
       this.setProperty('isDisposed', true)
     } catch (error) {
       console.error('Error during ThreeView disposal:', error)

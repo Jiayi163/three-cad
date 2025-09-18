@@ -3,4 +3,10 @@
 /* Import base styles */
 @import './base.css';
 
+/* Import CAD theme */
+@import './cad-theme.css';
+
+/* Import CAD icons */
+@import './cad-icons.css';
+
 /* Additional global utilities if needed */

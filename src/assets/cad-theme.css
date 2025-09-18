@@ -1,0 +1,319 @@
+/* CAD Application Theme - Professional Dark Theme */
+
+:root {
+  /* === CAD Color Palette === */
+
+  /* Primary Colors */
+  --cad-primary: #007acc;
+  --cad-primary-hover: #005a9e;
+  --cad-primary-active: #004578;
+  --cad-primary-light: rgba(0, 122, 204, 0.1);
+
+  /* Background Colors */
+  --cad-bg-primary: #1e1e1e;
+  --cad-bg-secondary: #2d2d30;
+  --cad-bg-tertiary: #3c3c3c;
+  --cad-bg-quaternary: #4a4a4a;
+
+  /* Surface Colors */
+  --cad-surface-dark: #252526;
+  --cad-surface-medium: #2f2f2f;
+  --cad-surface-light: #383838;
+  --cad-surface-hover: #404040;
+
+  /* Text Colors */
+  --cad-text-primary: #cccccc;
+  --cad-text-secondary: #969696;
+  --cad-text-tertiary: #6a6a6a;
+  --cad-text-disabled: #4a4a4a;
+  --cad-text-inverse: #1e1e1e;
+
+  /* Border Colors */
+  --cad-border-primary: #464647;
+  --cad-border-secondary: #3c3c3c;
+  --cad-border-light: #5a5a5a;
+  --cad-border-focus: var(--cad-primary);
+
+  /* Status Colors */
+  --cad-success: #4caf50;
+  --cad-success-light: rgba(76, 175, 80, 0.1);
+  --cad-warning: #ff9800;
+  --cad-warning-light: rgba(255, 152, 0, 0.1);
+  --cad-error: #f44336;
+  --cad-error-light: rgba(244, 67, 54, 0.1);
+  --cad-info: #2196f3;
+  --cad-info-light: rgba(33, 150, 243, 0.1);
+
+  /* Selection Colors */
+  --cad-selection: #ff4444;
+  --cad-selection-light: rgba(255, 68, 68, 0.2);
+  --cad-highlight: #ffaa00;
+  --cad-highlight-light: rgba(255, 170, 0, 0.2);
+
+  /* Spacing */
+  --cad-spacing-xs: 4px;
+  --cad-spacing-sm: 8px;
+  --cad-spacing-md: 12px;
+  --cad-spacing-lg: 16px;
+  --cad-spacing-xl: 24px;
+  --cad-spacing-xxl: 32px;
+
+  /* Border Radius */
+  --cad-radius-sm: 2px;
+  --cad-radius-md: 4px;
+  --cad-radius-lg: 6px;
+  --cad-radius-xl: 8px;
+
+  /* Shadows */
+  --cad-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --cad-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --cad-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --cad-shadow-panel: 0 2px 12px rgba(0, 0, 0, 0.3);
+
+  /* Typography */
+  --cad-font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+  --cad-font-mono: 'Consolas', 'Monaco', 'Courier New', monospace;
+  --cad-font-size-xs: 11px;
+  --cad-font-size-sm: 12px;
+  --cad-font-size-md: 13px;
+  --cad-font-size-lg: 14px;
+  --cad-font-size-xl: 16px;
+  --cad-font-size-xxl: 18px;
+  --cad-line-height: 1.4;
+
+  /* Transitions */
+  --cad-transition-fast: 0.15s ease;
+  --cad-transition-normal: 0.2s ease;
+  --cad-transition-slow: 0.3s ease;
+
+  /* Z-Index Layers */
+  --cad-z-dropdown: 1000;
+  --cad-z-tooltip: 1100;
+  --cad-z-modal: 1200;
+  --cad-z-notification: 1300;
+}
+
+/* === Global CAD Theme Application === */
+
+body {
+  background-color: var(--cad-bg-primary);
+  color: var(--cad-text-primary);
+  font-family: var(--cad-font-family);
+  font-size: var(--cad-font-size-md);
+  line-height: var(--cad-line-height);
+}
+
+/* === Scrollbars === */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--cad-bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--cad-border-primary);
+  border-radius: var(--cad-radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cad-border-light);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--cad-bg-secondary);
+}
+
+/* === Selection === */
+::selection {
+  background: var(--cad-primary-light);
+  color: var(--cad-text-primary);
+}
+
+/* === Focus Styles === */
+.cad-focus-ring {
+  outline: 2px solid var(--cad-border-focus);
+  outline-offset: 2px;
+}
+
+/* === CAD Button Base Styles === */
+.cad-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cad-spacing-sm);
+  padding: var(--cad-spacing-sm) var(--cad-spacing-md);
+  background: var(--cad-surface-medium);
+  color: var(--cad-text-primary);
+  border: 1px solid var(--cad-border-primary);
+  border-radius: var(--cad-radius-md);
+  font-family: var(--cad-font-family);
+  font-size: var(--cad-font-size-sm);
+  font-weight: 400;
+  cursor: pointer;
+  transition: all var(--cad-transition-fast);
+  user-select: none;
+}
+
+.cad-button:hover {
+  background: var(--cad-surface-hover);
+  border-color: var(--cad-border-light);
+}
+
+.cad-button:active {
+  background: var(--cad-surface-dark);
+  transform: translateY(1px);
+}
+
+.cad-button:disabled {
+  background: var(--cad-surface-dark);
+  color: var(--cad-text-disabled);
+  border-color: var(--cad-border-secondary);
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cad-button.active {
+  background: var(--cad-primary);
+  border-color: var(--cad-primary);
+  color: white;
+}
+
+.cad-button.active:hover {
+  background: var(--cad-primary-hover);
+  border-color: var(--cad-primary-hover);
+}
+
+/* === CAD Input Styles === */
+.cad-input {
+  padding: var(--cad-spacing-sm) var(--cad-spacing-md);
+  background: var(--cad-surface-dark);
+  color: var(--cad-text-primary);
+  border: 1px solid var(--cad-border-primary);
+  border-radius: var(--cad-radius-md);
+  font-family: var(--cad-font-family);
+  font-size: var(--cad-font-size-sm);
+  transition: border-color var(--cad-transition-fast);
+}
+
+.cad-input:focus {
+  border-color: var(--cad-border-focus);
+  box-shadow: 0 0 0 2px var(--cad-primary-light);
+}
+
+.cad-input::placeholder {
+  color: var(--cad-text-tertiary);
+}
+
+/* === CAD Panel Styles === */
+.cad-panel {
+  background: var(--cad-surface-medium);
+  border: 1px solid var(--cad-border-primary);
+  border-radius: var(--cad-radius-lg);
+  box-shadow: var(--cad-shadow-panel);
+  overflow: hidden;
+}
+
+.cad-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--cad-spacing-md) var(--cad-spacing-lg);
+  background: var(--cad-surface-light);
+  border-bottom: 1px solid var(--cad-border-primary);
+  font-weight: 500;
+  font-size: var(--cad-font-size-sm);
+  color: var(--cad-text-primary);
+}
+
+.cad-panel-content {
+  padding: var(--cad-spacing-lg);
+}
+
+/* === CAD Tooltip Base === */
+.cad-tooltip {
+  position: absolute;
+  z-index: var(--cad-z-tooltip);
+  padding: var(--cad-spacing-sm) var(--cad-spacing-md);
+  background: var(--cad-surface-dark);
+  color: var(--cad-text-primary);
+  border: 1px solid var(--cad-border-primary);
+  border-radius: var(--cad-radius-md);
+  font-size: var(--cad-font-size-xs);
+  white-space: nowrap;
+  box-shadow: var(--cad-shadow-md);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: all var(--cad-transition-normal);
+}
+
+.cad-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* === CAD Status Indicators === */
+.cad-status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cad-text-tertiary);
+}
+
+.cad-status-indicator.active {
+  background: var(--cad-success);
+  animation: pulse 2s infinite;
+}
+
+.cad-status-indicator.warning {
+  background: var(--cad-warning);
+}
+
+.cad-status-indicator.error {
+  background: var(--cad-error);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* === CAD Utility Classes === */
+.cad-text-primary { color: var(--cad-text-primary); }
+.cad-text-secondary { color: var(--cad-text-secondary); }
+.cad-text-tertiary { color: var(--cad-text-tertiary); }
+.cad-text-success { color: var(--cad-success); }
+.cad-text-warning { color: var(--cad-warning); }
+.cad-text-error { color: var(--cad-error); }
+.cad-text-info { color: var(--cad-info); }
+
+.cad-bg-primary { background-color: var(--cad-bg-primary); }
+.cad-bg-secondary { background-color: var(--cad-bg-secondary); }
+.cad-bg-surface { background-color: var(--cad-surface-medium); }
+
+.cad-border { border: 1px solid var(--cad-border-primary); }
+.cad-border-light { border: 1px solid var(--cad-border-light); }
+
+.cad-rounded { border-radius: var(--cad-radius-md); }
+.cad-rounded-lg { border-radius: var(--cad-radius-lg); }
+
+.cad-shadow { box-shadow: var(--cad-shadow-sm); }
+.cad-shadow-md { box-shadow: var(--cad-shadow-md); }
+.cad-shadow-lg { box-shadow: var(--cad-shadow-lg); }
+
+/* === Responsive Design === */
+@media (max-width: 768px) {
+  :root {
+    --cad-font-size-xs: 10px;
+    --cad-font-size-sm: 11px;
+    --cad-font-size-md: 12px;
+    --cad-font-size-lg: 13px;
+    --cad-spacing-sm: 6px;
+    --cad-spacing-md: 10px;
+    --cad-spacing-lg: 14px;
+  }
+}

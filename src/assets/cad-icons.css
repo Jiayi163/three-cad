@@ -1,0 +1,189 @@
+/* CAD Icons - CSS-based Icon System */
+
+/* === Icon Base Class === */
+.cad-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+  line-height: 1;
+  text-align: center;
+  vertical-align: middle;
+  font-style: normal;
+  font-weight: normal;
+  speak: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Icon Sizes */
+.cad-icon-xs { width: 12px; height: 12px; font-size: 12px; }
+.cad-icon-sm { width: 14px; height: 14px; font-size: 14px; }
+.cad-icon-md { width: 16px; height: 16px; font-size: 16px; }
+.cad-icon-lg { width: 20px; height: 20px; font-size: 20px; }
+.cad-icon-xl { width: 24px; height: 24px; font-size: 24px; }
+
+/* === Unicode-based Icons === */
+
+/* File Operations */
+.cad-icon-file::before { content: '📄'; }
+.cad-icon-folder::before { content: '📁'; }
+.cad-icon-save::before { content: '💾'; }
+.cad-icon-open::before { content: '📂'; }
+.cad-icon-new::before { content: '📝'; }
+.cad-icon-export::before { content: '📤'; }
+.cad-icon-import::before { content: '📥'; }
+
+/* Edit Operations */
+.cad-icon-undo::before { content: '↶'; }
+.cad-icon-redo::before { content: '↷'; }
+.cad-icon-copy::before { content: '📋'; }
+.cad-icon-paste::before { content: '📄'; }
+.cad-icon-cut::before { content: '✂️'; }
+.cad-icon-delete::before { content: '🗑️'; }
+
+/* Tools */
+.cad-icon-select::before { content: '🔍'; }
+.cad-icon-move::before { content: '✋'; }
+.cad-icon-rotate::before { content: '🔄'; }
+.cad-icon-scale::before { content: '⚖️'; }
+.cad-icon-measure::before { content: '📏'; }
+
+/* Shapes */
+.cad-icon-box::before { content: '⬜'; }
+.cad-icon-sphere::before { content: '⚪'; }
+.cad-icon-cylinder::before { content: '🥫'; }
+.cad-icon-plane::before { content: '▫️'; }
+.cad-icon-cone::before { content: '🔺'; }
+.cad-icon-torus::before { content: '⭕'; }
+.cad-icon-line::before { content: '📏'; }
+.cad-icon-circle::before { content: '⭕'; }
+
+/* View Controls */
+.cad-icon-zoom-in::before { content: '🔍'; }
+.cad-icon-zoom-out::before { content: '🔍'; }
+.cad-icon-zoom-fit::before { content: '🎯'; }
+.cad-icon-pan::before { content: '✋'; }
+.cad-icon-orbit::before { content: '🔄'; }
+
+/* View Presets */
+.cad-icon-view-front::before { content: '⬛'; }
+.cad-icon-view-back::before { content: '⬜'; }
+.cad-icon-view-left::before { content: '◀️'; }
+.cad-icon-view-right::before { content: '▶️'; }
+.cad-icon-view-top::before { content: '🔼'; }
+.cad-icon-view-bottom::before { content: '🔽'; }
+.cad-icon-view-iso::before { content: '📦'; }
+
+/* Interface */
+.cad-icon-expand::before { content: '▼'; }
+.cad-icon-collapse::before { content: '▲'; }
+.cad-icon-close::before { content: '✖️'; }
+.cad-icon-minimize::before { content: '➖'; }
+.cad-icon-maximize::before { content: '⬜'; }
+.cad-icon-settings::before { content: '⚙️'; }
+.cad-icon-help::before { content: '❓'; }
+.cad-icon-info::before { content: 'ℹ️'; }
+
+/* Status */
+.cad-icon-success::before { content: '✅'; }
+.cad-icon-warning::before { content: '⚠️'; }
+.cad-icon-error::before { content: '❌'; }
+.cad-icon-loading::before { content: '⏳'; }
+
+/* Navigation */
+.cad-icon-up::before { content: '⬆️'; }
+.cad-icon-down::before { content: '⬇️'; }
+.cad-icon-left::before { content: '⬅️'; }
+.cad-icon-right::before { content: '➡️'; }
+
+/* === Alternative Text-based Icons === */
+
+/* For better browser compatibility, provide text-based alternatives */
+.cad-icon-text {
+  font-family: var(--cad-font-mono);
+  font-weight: bold;
+  font-size: 0.8em;
+  background: var(--cad-surface-light);
+  border: 1px solid var(--cad-border-primary);
+  border-radius: var(--cad-radius-sm);
+  padding: 2px 4px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Text-based icon alternatives */
+.cad-icon-text.box::before { content: '□'; }
+.cad-icon-text.sphere::before { content: '○'; }
+.cad-icon-text.cylinder::before { content: '⌭'; }
+.cad-icon-text.plane::before { content: '▭'; }
+.cad-icon-text.cone::before { content: '△'; }
+.cad-icon-text.select::before { content: '→'; }
+.cad-icon-text.move::before { content: '↔'; }
+.cad-icon-text.rotate::before { content: '↻'; }
+.cad-icon-text.scale::before { content: '⤢'; }
+
+/* === Icon States === */
+.cad-icon.active {
+  color: var(--cad-primary);
+}
+
+.cad-icon.disabled {
+  color: var(--cad-text-disabled);
+  opacity: 0.5;
+}
+
+.cad-icon.success {
+  color: var(--cad-success);
+}
+
+.cad-icon.warning {
+  color: var(--cad-warning);
+}
+
+.cad-icon.error {
+  color: var(--cad-error);
+}
+
+/* === Icon Animations === */
+.cad-icon.spin {
+  animation: cad-icon-spin 1s linear infinite;
+}
+
+.cad-icon.pulse {
+  animation: cad-icon-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes cad-icon-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cad-icon-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* === Icon Button Combinations === */
+.cad-button .cad-icon {
+  margin-right: var(--cad-spacing-xs);
+}
+
+.cad-button .cad-icon:only-child {
+  margin-right: 0;
+}
+
+/* === Responsive Icon Adjustments === */
+@media (max-width: 768px) {
+  .cad-icon {
+    width: 14px;
+    height: 14px;
+    font-size: 14px;
+  }
+
+  .cad-icon-lg {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+}
