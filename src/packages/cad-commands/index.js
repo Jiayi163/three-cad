@@ -8,10 +8,28 @@
 // Import all command classes
 import { BoxCommand } from './BoxCommand.js'
 import { SphereCommand } from './SphereCommand.js'
+import { CylinderCommand } from './CylinderCommand.js'
+import { PlaneCommand } from './PlaneCommand.js'
+import { ConeCommand } from './ConeCommand.js'
+import { TorusCommand } from './TorusCommand.js'
+import { LineCommand } from './LineCommand.js'
+import { CircleCommand } from './CircleCommand.js'
+import { RotateCommand } from './RotateCommand.js'
+import { MoveCommand } from './MoveCommand.js'
+import { ScaleCommand } from './ScaleCommand.js'
 
 // Export individual commands
 export { BoxCommand } from './BoxCommand.js'
 export { SphereCommand } from './SphereCommand.js'
+export { CylinderCommand } from './CylinderCommand.js'
+export { PlaneCommand } from './PlaneCommand.js'
+export { ConeCommand } from './ConeCommand.js'
+export { TorusCommand } from './TorusCommand.js'
+export { LineCommand } from './LineCommand.js'
+export { CircleCommand } from './CircleCommand.js'
+export { RotateCommand } from './RotateCommand.js'
+export { MoveCommand } from './MoveCommand.js'
+export { ScaleCommand } from './ScaleCommand.js'
 
 /**
  * Registry of all available commands with their metadata
@@ -53,6 +71,252 @@ export const COMMAND_REGISTRY = {
         wireframe: { type: 'boolean', default: false },
         metalness: { type: 'number', default: 0.0, min: 0, max: 1, step: 0.1 },
         roughness: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1 }
+      }
+    }
+  },
+
+  'create-cylinder': {
+    CommandClass: CylinderCommand,
+    metadata: {
+      name: 'Create Cylinder',
+      description: 'Create a 3D cylinder with customizable dimensions',
+      category: 'Geometry',
+      icon: '🟠',
+      shortcut: 'C',
+      parameters: {
+        radiusTop: { type: 'number', default: 1.0, min: 0.1, max: 50 },
+        radiusBottom: { type: 'number', default: 1.0, min: 0.1, max: 50 },
+        height: { type: 'number', default: 2.0, min: 0.1, max: 100 },
+        radialSegments: { type: 'integer', default: 32, min: 3, max: 64 },
+        heightSegments: { type: 'integer', default: 1, min: 1, max: 32 },
+        color: { type: 'color', default: '#FF9800' },
+        opacity: { type: 'number', default: 1.0, min: 0, max: 1, step: 0.1 },
+        wireframe: { type: 'boolean', default: false },
+        metalness: { type: 'number', default: 0.0, min: 0, max: 1, step: 0.1 },
+        roughness: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1 },
+        openEnded: { type: 'boolean', default: false }
+      }
+    }
+  },
+
+  'create-plane': {
+    CommandClass: PlaneCommand,
+    metadata: {
+      name: 'Create Plane',
+      description: 'Create a 3D plane with customizable dimensions',
+      category: 'Geometry',
+      icon: '🟣',
+      shortcut: 'P',
+      parameters: {
+        width: { type: 'number', default: 2.0, min: 0.1, max: 100 },
+        height: { type: 'number', default: 2.0, min: 0.1, max: 100 },
+        widthSegments: { type: 'integer', default: 1, min: 1, max: 32 },
+        heightSegments: { type: 'integer', default: 1, min: 1, max: 32 },
+        color: { type: 'color', default: '#9C27B0' },
+        opacity: { type: 'number', default: 1.0, min: 0, max: 1, step: 0.1 },
+        wireframe: { type: 'boolean', default: false },
+        metalness: { type: 'number', default: 0.0, min: 0, max: 1, step: 0.1 },
+        roughness: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1 },
+        side: { type: 'string', default: 'DoubleSide', options: ['FrontSide', 'BackSide', 'DoubleSide'] }
+      }
+    }
+  },
+
+  'create-cone': {
+    CommandClass: ConeCommand,
+    metadata: {
+      name: 'Create Cone',
+      description: 'Create a 3D cone with customizable dimensions',
+      category: 'Geometry',
+      icon: '🔺',
+      shortcut: 'N',
+      parameters: {
+        radius: { type: 'number', default: 1.0, min: 0.1, max: 50 },
+        height: { type: 'number', default: 2.0, min: 0.1, max: 100 },
+        radialSegments: { type: 'integer', default: 32, min: 3, max: 64 },
+        heightSegments: { type: 'integer', default: 1, min: 1, max: 32 },
+        color: { type: 'color', default: '#E91E63' },
+        opacity: { type: 'number', default: 1.0, min: 0, max: 1, step: 0.1 },
+        wireframe: { type: 'boolean', default: false },
+        metalness: { type: 'number', default: 0.0, min: 0, max: 1, step: 0.1 },
+        roughness: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1 },
+        openEnded: { type: 'boolean', default: false }
+      }
+    }
+  },
+
+  'create-torus': {
+    CommandClass: TorusCommand,
+    metadata: {
+      name: 'Create Torus',
+      description: 'Create a 3D torus with customizable dimensions',
+      category: 'Geometry',
+      icon: '🍩',
+      shortcut: 'T',
+      parameters: {
+        radius: { type: 'number', default: 1.0, min: 0.1, max: 50 },
+        tube: { type: 'number', default: 0.4, min: 0.05, max: 10 },
+        radialSegments: { type: 'integer', default: 16, min: 3, max: 32 },
+        tubularSegments: { type: 'integer', default: 100, min: 3, max: 200 },
+        arc: { type: 'number', default: 6.28318, min: 0.1, max: 6.28318, step: 0.1 },
+        color: { type: 'color', default: '#607D8B' },
+        opacity: { type: 'number', default: 1.0, min: 0, max: 1, step: 0.1 },
+        wireframe: { type: 'boolean', default: false },
+        metalness: { type: 'number', default: 0.0, min: 0, max: 1, step: 0.1 },
+        roughness: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1 }
+      }
+    }
+  },
+
+  'create-line': {
+    CommandClass: LineCommand,
+    metadata: {
+      name: 'Create Line',
+      description: 'Create a 3D line with multiple points',
+      category: 'Geometry',
+      icon: '📏',
+      shortcut: 'L',
+      parameters: {
+        points: { type: 'array', default: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }] },
+        color: { type: 'color', default: '#00FF00' },
+        opacity: { type: 'number', default: 1.0, min: 0, max: 1, step: 0.1 },
+        linewidth: { type: 'number', default: 1, min: 1, max: 10 }
+      }
+    }
+  },
+
+  'create-circle': {
+    CommandClass: CircleCommand,
+    metadata: {
+      name: 'Create Circle',
+      description: 'Create a 3D circle with customizable radius',
+      category: 'Geometry',
+      icon: '⭕',
+      shortcut: 'O',
+      parameters: {
+        radius: { type: 'number', default: 1.0, min: 0.1, max: 50 },
+        segments: { type: 'integer', default: 32, min: 3, max: 64 },
+        thetaStart: { type: 'number', default: 0, min: 0, max: 6.28318, step: 0.1 },
+        thetaLength: { type: 'number', default: 6.28318, min: 0.1, max: 6.28318, step: 0.1 },
+        color: { type: 'color', default: '#FFEB3B' },
+        opacity: { type: 'number', default: 1.0, min: 0, max: 1, step: 0.1 },
+        wireframe: { type: 'boolean', default: false },
+        metalness: { type: 'number', default: 0.0, min: 0, max: 1, step: 0.1 },
+        roughness: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1 }
+      }
+    }
+  },
+
+
+  'rotate-objects': {
+    CommandClass: RotateCommand,
+    metadata: {
+      name: 'Rotate Objects',
+      description: 'Rotate selected objects around a specified axis',
+      category: 'Transform',
+      icon: '🔄',
+      shortcut: 'R',
+      parameters: {
+        rotationAxis: {
+          type: 'string',
+          default: 'y',
+          options: ['x', 'y', 'z', 'custom'],
+          description: 'Rotation axis (X, Y, Z, or custom)'
+        },
+        rotationAngleDegrees: {
+          type: 'number',
+          default: 90,
+          min: -360,
+          max: 360,
+          step: 1,
+          description: 'Rotation angle in degrees'
+        },
+        useObjectCenter: {
+          type: 'boolean',
+          default: true,
+          description: 'Use object center as rotation center'
+        },
+        rotationCenter: {
+          type: 'object',
+          default: { x: 0, y: 0, z: 0 },
+          description: 'Custom rotation center point'
+        },
+        isInteractive: {
+          type: 'boolean',
+          default: false,
+          description: 'Enable interactive rotation mode'
+        }
+      }
+    }
+  },
+
+  'move-objects': {
+    CommandClass: MoveCommand,
+    metadata: {
+      name: 'Move Objects',
+      description: 'Move selected objects to a new location',
+      category: 'Transform',
+      icon: '⬆️',
+      shortcut: 'M',
+      parameters: {
+        moveVector: {
+          type: 'object',
+          default: { x: 0, y: 0, z: 0 },
+          description: 'Move offset vector'
+        },
+        useCurrentPosition: {
+          type: 'boolean',
+          default: true,
+          description: 'Use current position as base point'
+        },
+        basePoint: {
+          type: 'object',
+          default: { x: 0, y: 0, z: 0 },
+          description: 'Base point for move operation'
+        },
+        isInteractive: {
+          type: 'boolean',
+          default: false,
+          description: 'Enable interactive move mode'
+        }
+      }
+    }
+  },
+
+  'scale-objects': {
+    CommandClass: ScaleCommand,
+    metadata: {
+      name: 'Scale Objects',
+      description: 'Scale selected objects by a specified factor',
+      category: 'Transform',
+      icon: '🔍',
+      shortcut: 'S',
+      parameters: {
+        scaleFactor: {
+          type: 'object',
+          default: { x: 1, y: 1, z: 1 },
+          description: 'Scale factors for X, Y, Z axes'
+        },
+        uniformScale: {
+          type: 'boolean',
+          default: false,
+          description: 'Use uniform scaling (same factor for all axes) - default is non-uniform for XYZ stretching'
+        },
+        useObjectCenter: {
+          type: 'boolean',
+          default: true,
+          description: 'Use object center as scale center'
+        },
+        scaleCenter: {
+          type: 'object',
+          default: { x: 0, y: 0, z: 0 },
+          description: 'Custom scale center point'
+        },
+        isInteractive: {
+          type: 'boolean',
+          default: false,
+          description: 'Enable interactive scale mode'
+        }
       }
     }
   }

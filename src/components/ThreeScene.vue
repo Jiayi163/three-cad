@@ -86,7 +86,7 @@ import { ref, onMounted, onUnmounted, watch, markRaw } from 'vue'
 import { storeToRefs } from 'pinia'
 import * as THREE from 'three'
 import { ThreeView } from '../packages/cad-three/ThreeView.js'
-import { createVisualObject } from '../packages/cad-three/BasicShapes.js'
+// import { createVisualObject } from '../packages/cad-three/BasicShapes.js' // Unused for now
 import { useApplicationStore } from '../stores/application.js'
 
 export default {
@@ -151,10 +151,13 @@ export default {
         // Attach to DOM
         if (containerRef.value) {
           threeView.value.setDom(containerRef.value)
+
+          // Expose ThreeView instance globally for InteractiveInput
+          containerRef.value.__threeView__ = threeView.value
+          window.__THREESCENE_INSTANCE__ = threeView.value
         }
 
-        // Add some demo objects for now
-        addDemoObjects()
+        // Demo objects removed - clean start
 
         // Set up document node listeners
         setupDocumentListeners()
@@ -236,52 +239,7 @@ export default {
 
       console.log('Document listeners setup complete')
 
-      // Debug: Add a test function to manually create a box
-      window.debugCreateBox = () => {
-        console.log('🔧 DEBUG: Manually creating a test box...')
 
-        // Create a simple test box directly
-        const geometry = markRaw(new THREE.BoxGeometry(1, 1, 1))
-        const material = markRaw(new THREE.MeshStandardMaterial({
-          color: 0xff0000, // Red for debugging
-          metalness: 0.1,
-          roughness: 0.3
-        }))
-
-        const testBox = markRaw(new THREE.Mesh(geometry, material))
-        testBox.position.set(3, 1, 0) // Position it to the side
-        testBox.castShadow = true
-        testBox.receiveShadow = true
-        testBox.userData.nodeId = 'debug-box'
-
-        if (threeView.value) {
-          threeView.value.addVisualObject('debug-box', testBox)
-          threeView.value.requestRender()
-          console.log('🔧 DEBUG: Test box added to scene')
-        }
-      }
-
-      console.log('🔧 DEBUG: Added debugCreateBox() function - call it in console to test 3D rendering')
-
-      // Debug: Add a function to test BoxCommand execution
-      window.debugBoxCommand = async () => {
-        console.log('🔧 DEBUG: Testing BoxCommand execution...')
-
-        try {
-          const appStore = applicationStore
-          if (appStore && appStore.executeCommand) {
-            console.log('🔧 DEBUG: Executing create-box command...')
-            const result = await appStore.executeCommand('create-box')
-            console.log('🔧 DEBUG: BoxCommand result:', result)
-          } else {
-            console.error('🔧 DEBUG: Application store or executeCommand not available')
-          }
-        } catch (error) {
-          console.error('🔧 DEBUG: BoxCommand execution failed:', error)
-        }
-      }
-
-      console.log('🔧 DEBUG: Added debugBoxCommand() function - call it in console to test BoxCommand')
     }
 
     // Phase 5.3 - Document Node to 3D Object Handler Functions
@@ -316,7 +274,7 @@ export default {
 
               if (object3D) {
                 // Add to the 3D scene
-                threeView.value.addVisualObject(node.name || node.id, object3D)
+                threeView.value.addVisualObject(node.id, object3D)
 
                 // Store the mapping for later reference
                 nodeToVisualObjectMap.set(node.id, {
@@ -410,18 +368,67 @@ export default {
             case 'position':
               if (newValue && mapping.object3D.position) {
                 mapping.object3D.position.set(newValue.x || 0, newValue.y || 0, newValue.z || 0)
+                // Force render update
+                if (threeView.value && threeView.value.render) {
+                  threeView.value.render()
+                }
               }
               break
 
             case 'rotation':
               if (newValue && mapping.object3D.rotation) {
                 mapping.object3D.rotation.set(newValue.x || 0, newValue.y || 0, newValue.z || 0)
+                console.log(`Applied rotation to ${node.name}:`, {
+                  x: newValue.x || 0,
+                  y: newValue.y || 0,
+                  z: newValue.z || 0,
+                  yDegrees: ((newValue.y || 0) * 180 / Math.PI).toFixed(1) + '°'
+                })
+                // Force render update
+                if (threeView.value && threeView.value.render) {
+                  threeView.value.render()
+                }
               }
               break
 
             case 'scale':
               if (newValue && mapping.object3D.scale) {
-                mapping.object3D.scale.set(newValue.x || 1, newValue.y || 1, newValue.z || 1)
+                const scaleX = newValue.x || 1
+                const scaleY = newValue.y || 1
+                const scaleZ = newValue.z || 1
+
+                // Direct scale application - Three.js handles negative scales correctly
+                mapping.object3D.scale.set(scaleX, scaleY, scaleZ)
+
+                // For negative scales (mirroring), ensure materials show both sides
+                if (scaleX < 0 || scaleY < 0 || scaleZ < 0) {
+                  if (mapping.object3D.material) {
+                    if (Array.isArray(mapping.object3D.material)) {
+                      mapping.object3D.material.forEach(mat => {
+                        mat.side = THREE.DoubleSide
+                        mat.needsUpdate = true
+                      })
+                    } else {
+                      mapping.object3D.material.side = THREE.DoubleSide
+                      mapping.object3D.material.needsUpdate = true
+                    }
+                  }
+
+                  console.log(`Applied mirror scale to ${node.name}:`, {
+                    scale: { x: scaleX, y: scaleY, z: scaleZ },
+                    isMirrored: true
+                  })
+                } else {
+                  console.log(`Applied normal scale to ${node.name}:`, {
+                    scale: { x: scaleX, y: scaleY, z: scaleZ },
+                    isMirrored: false
+                  })
+                }
+
+                // Force render update
+                if (threeView.value && threeView.value.render) {
+                  threeView.value.render()
+                }
               }
               break
 
@@ -539,154 +546,7 @@ export default {
       }
     }
 
-    const addDemoObjects = async () => {
-      if (!threeView.value) return
 
-      try {
-        // Create a demo box using the new VisualObject system
-        const boxVisualObject = createVisualObject('box', 'demo-box', {
-          width: 2,
-          height: 2,
-          depth: 2
-        })
-
-        // Set custom material colors
-        boxVisualObject.setMaterialConfig('default', {
-          color: 0x4CAF50,
-          metalness: 0.1,
-          roughness: 0.3
-        })
-
-        // Set position and add to scene
-        boxVisualObject.position = { x: 0, y: 1, z: 0 }
-        const boxObject3D = await threeView.value.addVisualObjectInstance(boxVisualObject)
-
-        // Add floating animation
-        const animateBox = () => {
-          if (boxObject3D && threeView.value && !boxVisualObject.disposed) {
-            const time = Date.now() * 0.002
-            boxVisualObject.rotation = {
-              x: time * 0.5,
-              y: time,
-              z: 0
-            }
-            boxVisualObject.position = {
-              x: 0,
-              y: 1 + Math.sin(time) * 0.5,
-              z: 0
-            }
-            threeView.value.requestRender()
-          }
-          requestAnimationFrame(animateBox)
-        }
-        animateBox()
-
-        // Create a demo sphere
-        const sphereVisualObject = createVisualObject('sphere', 'demo-sphere', {
-          radius: 1,
-          widthSegments: 32,
-          heightSegments: 16
-        })
-
-        sphereVisualObject.setMaterialConfig('default', {
-          color: 0x2196F3,
-          metalness: 0.2,
-          roughness: 0.4
-        })
-
-        sphereVisualObject.position = { x: -4, y: 1, z: 0 }
-        await threeView.value.addVisualObjectInstance(sphereVisualObject)
-
-        // Create a demo cylinder
-        const cylinderVisualObject = createVisualObject('cylinder', 'demo-cylinder', {
-          radiusTop: 1,
-          radiusBottom: 1,
-          height: 2,
-          radialSegments: 16
-        })
-
-        cylinderVisualObject.setMaterialConfig('default', {
-          color: 0xFF9800,
-          metalness: 0.15,
-          roughness: 0.35
-        })
-
-        cylinderVisualObject.position = { x: 4, y: 1, z: 0 }
-        await threeView.value.addVisualObjectInstance(cylinderVisualObject)
-
-        // Create ground plane using VisualObject
-        const groundVisualObject = createVisualObject('plane', 'demo-ground', {
-          width: 20,
-          height: 20
-        })
-
-        groundVisualObject.setMaterialConfig('default', {
-          color: 0x808080,
-          metalness: 0.1,
-          roughness: 0.8
-        })
-
-        groundVisualObject.rotation = { x: -Math.PI / 2, y: 0, z: 0 }
-        groundVisualObject.position = { x: 0, y: -2, z: 0 }
-        await threeView.value.addVisualObjectInstance(groundVisualObject)
-
-        console.log('Demo VisualObjects created successfully')
-
-      } catch (error) {
-        console.error('Failed to create demo VisualObjects:', error)
-
-        // Fallback to legacy objects if VisualObject system fails
-        addLegacyDemoObjects()
-      }
-    }
-
-    const addLegacyDemoObjects = () => {
-      if (!threeView.value) return
-
-      console.log('Using legacy demo objects as fallback')
-
-      // Add a demo cube (similar to the original)
-      const geometry = markRaw(new THREE.BoxGeometry(2, 2, 2))
-      const material = markRaw(new THREE.MeshStandardMaterial({
-        color: 0x4CAF50,
-        metalness: 0.1,
-        roughness: 0.3
-      }))
-
-      const cube = markRaw(new THREE.Mesh(geometry, material))
-      cube.castShadow = true
-      cube.receiveShadow = true
-      cube.userData.nodeId = 'demo-cube'
-
-      // Add floating animation
-      const animate = () => {
-        if (cube && threeView.value) {
-          cube.rotation.x += 0.005
-          cube.rotation.y += 0.01
-          cube.position.y = Math.sin(Date.now() * 0.002) * 0.5
-          threeView.value.requestRender()
-        }
-        requestAnimationFrame(animate)
-      }
-      animate()
-
-      threeView.value.addVisualObject('demo-cube', cube)
-
-      // Add a ground plane
-      const planeGeometry = markRaw(new THREE.PlaneGeometry(20, 20))
-      const planeMaterial = markRaw(new THREE.MeshStandardMaterial({
-        color: 0x808080,
-        metalness: 0.1,
-        roughness: 0.8
-      }))
-      const plane = markRaw(new THREE.Mesh(planeGeometry, planeMaterial))
-      plane.rotation.x = -Math.PI / 2
-      plane.position.y = -2
-      plane.receiveShadow = true
-      plane.userData.nodeId = 'demo-ground'
-
-      threeView.value.addVisualObject('demo-ground', plane)
-    }
 
     const startFpsMonitoring = () => {
       const updateFps = () => {
@@ -708,6 +568,14 @@ export default {
       if (threeView.value) {
         threeView.value.dispose()
         threeView.value = null
+      }
+
+      // Clean up global references
+      if (containerRef.value) {
+        containerRef.value.__threeView__ = null
+      }
+      if (window.__THREESCENE_INSTANCE__) {
+        window.__THREESCENE_INSTANCE__ = null
       }
     }
 

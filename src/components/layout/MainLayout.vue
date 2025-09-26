@@ -561,14 +561,8 @@ export default {
       console.log('🔧 MainLayout: Box button clicked directly!')
       setActiveTool('box')
 
-      // Also directly execute the command as a fallback
-      try {
-        console.log('🔧 MainLayout: Directly executing create-box command...')
-        const result = await appStore.executeCommand('create-box')
-        console.log('🔧 MainLayout: Direct box creation result:', result)
-      } catch (error) {
-        console.error('🔧 MainLayout: Direct box creation failed:', error)
-      }
+      // The tool change will trigger interactive creation, no need for direct execution
+      // Interactive creation is handled by WorkspaceView.handleToolChange
     }
 
     const togglePanel = (panel) => {

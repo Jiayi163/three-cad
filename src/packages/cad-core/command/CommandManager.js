@@ -100,6 +100,12 @@ export class CommandManager extends Observable {
     // Apply parameters to command
     Object.assign(command, parameters)
 
+    // Set up context for modification commands
+    if (command.setContext && this.application && this.application.activeDocument) {
+      const selectedObjects = this.application.activeDocument.selectedNodes.items
+      command.setContext(selectedObjects, this.application.activeDocument)
+    }
+
     return command
   }
 

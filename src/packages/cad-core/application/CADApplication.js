@@ -2,6 +2,7 @@ import { Observable } from '../foundation/Observable.js';
 import { ObservableCollection } from '../foundation/Collection.js';
 import { History } from '../foundation/History.js';
 import { CommandManager } from '../command/CommandManager.js';
+import { Selection } from '../selection/Selection.js';
 
 /**
  * CADApplication - Main application class managing documents, views, and global state
@@ -32,6 +33,9 @@ export class CADApplication extends Observable {
 
     // Command system
     this._commandManager = new CommandManager(this);
+
+    // Selection system (will be initialized when view is set)
+    this._selection = null;
 
     // Initialize properties
     this.setProperty('isInitialized', false);
@@ -65,6 +69,10 @@ export class CADApplication extends Observable {
 
   get commandManager() {
     return this._commandManager;
+  }
+
+  get selection() {
+    return this._selection;
   }
 
   get viewCount() {
@@ -290,6 +298,15 @@ export class CADApplication extends Observable {
 
     if (view) {
       view.isActive = true;
+
+      // Initialize selection system for this view
+      this._initializeSelection(view);
+    } else {
+      // Clean up selection system when no active view
+      if (this._selection) {
+        this._selection.dispose();
+        this._selection = null;
+      }
     }
 
     // Update property
@@ -323,6 +340,87 @@ export class CADApplication extends Observable {
 
     console.log(`Closed view: ${view.name}`);
     return true;
+  }
+
+  // ==================== Selection Management ====================
+
+  /**
+   * Initialize selection system for a view
+   * @param {Object} view - The view to initialize selection for
+   */
+  _initializeSelection(view) {
+    // Clean up existing selection system
+    if (this._selection) {
+      this._selection.dispose();
+    }
+
+    // Create new selection system
+    this._selection = new Selection(this._activeDocument, view);
+
+    // Integrate selection manager with ThreeView
+    if (view && view.setSelectionManager && this._selection.manager) {
+      view.setSelectionManager(this._selection.manager);
+    }
+
+    // Set up selection event listeners
+    this._selection.onChange((oldValue, selectionData) => {
+      this.setProperty('selectedCount', selectionData.count);
+      this.setProperty('hasSelection', selectionData.count > 0);
+      this.setProperty('selectedTypes', selectionData.source);
+
+      // Notify global selection change
+      this.notifyPropertyChanged('selectionChanged', oldValue, selectionData);
+    });
+
+    console.log(`Selection system initialized for view: ${view.name}`);
+  }
+
+  /**
+   * Get current selection info
+   */
+  getSelectionInfo() {
+    return this._selection ? this._selection.getInfo() : null;
+  }
+
+  /**
+   * Select objects
+   * @param {Array|Object} objects - Objects to select
+   * @param {Boolean} addToSelection - Whether to add to current selection
+   */
+  selectObjects(objects, addToSelection = false) {
+    if (this._selection) {
+      return this._selection.select(objects, addToSelection);
+    }
+    return 0;
+  }
+
+  /**
+   * Clear selection
+   */
+  clearSelection() {
+    if (this._selection) {
+      return this._selection.clear();
+    }
+  }
+
+  /**
+   * Select all objects
+   */
+  selectAll() {
+    if (this._selection) {
+      return this._selection.selectAll();
+    }
+    return 0;
+  }
+
+  /**
+   * Invert selection
+   */
+  invertSelection() {
+    if (this._selection) {
+      return this._selection.invert();
+    }
+    return 0;
   }
 
   // ==================== History Management ====================

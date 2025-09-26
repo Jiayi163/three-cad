@@ -1,40 +1,38 @@
 /**
- * SphereCommand - Creates a 3D sphere geometry
+ * TorusCommand - Creates a 3D torus geometry
  *
  * Demonstrates parametric geometry creation with
- * customizable subdivision levels and material properties
+ * customizable dimensions and material properties
  */
 
 import { GeometryCommand, CommandResult } from '../cad-core/command/Command.js'
-import { SphereVisualObject } from '../cad-three/BasicShapes.js'
+import { TorusVisualObject } from '../cad-three/BasicShapes.js'
 import { markRaw } from 'vue'
 
 /**
- * Command to create a sphere geometry in the 3D scene
+ * Command to create a torus geometry in the 3D scene
  */
-export class SphereCommand extends GeometryCommand {
+export class TorusCommand extends GeometryCommand {
   constructor() {
     super()
 
-    this.name = 'CreateSphere'
-    this.description = 'Create a 3D sphere geometry'
+    this.name = 'CreateTorus'
+    this.description = 'Create a 3D torus geometry'
     this.category = 'Geometry'
 
-    // Sphere parameters with defaults
+    // Torus parameters with defaults
     this.radius = 1.0
+    this.tube = 0.4
     this.position = { x: 0, y: 0, z: 0 }
     this.rotation = { x: 0, y: 0, z: 0 }
 
     // Subdivision parameters for geometry quality
-    this.widthSegments = 32
-    this.heightSegments = 16
-    this.phiStart = 0
-    this.phiLength = Math.PI * 2
-    this.thetaStart = 0
-    this.thetaLength = Math.PI
+    this.radialSegments = 16
+    this.tubularSegments = 100
+    this.arc = Math.PI * 2
 
     // Material properties
-    this.color = '#2196F3'
+    this.color = '#607D8B'
     this.opacity = 1.0
     this.wireframe = false
     this.metalness = 0.0
@@ -44,21 +42,21 @@ export class SphereCommand extends GeometryCommand {
     this.isInteractive = false
     this.centerPoint = null
     this.radiusPoint = null
-
-    // Dimension input mode
-    this.useDimensionInput = false
+    this.tubePoint = null
   }
 
   /**
-   * Set sphere radius
-   * @param {number} radius - Sphere radius
+   * Set torus dimensions
+   * @param {number} radius - Major radius (distance from center to tube center)
+   * @param {number} tube - Minor radius (tube thickness)
    */
-  setRadius(radius) {
+  setDimensions(radius, tube) {
     this.radius = Math.max(0.1, radius)
+    this.tube = Math.max(0.05, Math.min(tube, radius * 0.9)) // Tube can't be larger than radius
   }
 
   /**
-   * Set sphere position
+   * Set torus position
    * @param {number} x - X coordinate
    * @param {number} y - Y coordinate
    * @param {number} z - Z coordinate
@@ -68,7 +66,7 @@ export class SphereCommand extends GeometryCommand {
   }
 
   /**
-   * Set sphere rotation
+   * Set torus rotation
    * @param {number} x - X rotation in radians
    * @param {number} y - Y rotation in radians
    * @param {number} z - Z rotation in radians
@@ -79,26 +77,20 @@ export class SphereCommand extends GeometryCommand {
 
   /**
    * Set geometry subdivision parameters
-   * @param {number} widthSegments - Number of horizontal segments
-   * @param {number} heightSegments - Number of vertical segments
+   * @param {number} radialSegments - Number of radial segments
+   * @param {number} tubularSegments - Number of tubular segments
    */
-  setSubdivision(widthSegments = 32, heightSegments = 16) {
-    this.widthSegments = Math.max(3, Math.min(64, widthSegments))
-    this.heightSegments = Math.max(2, Math.min(32, heightSegments))
+  setSubdivision(radialSegments = 16, tubularSegments = 100) {
+    this.radialSegments = Math.max(3, Math.min(32, radialSegments))
+    this.tubularSegments = Math.max(3, Math.min(200, tubularSegments))
   }
 
   /**
-   * Set sphere section parameters for partial spheres
-   * @param {number} phiStart - Start angle for horizontal sweep
-   * @param {number} phiLength - Length of horizontal sweep
-   * @param {number} thetaStart - Start angle for vertical sweep
-   * @param {number} thetaLength - Length of vertical sweep
+   * Set torus arc parameter for partial torus
+   * @param {number} arc - Arc length in radians (0 to 2π)
    */
-  setSectionParameters(phiStart = 0, phiLength = Math.PI * 2, thetaStart = 0, thetaLength = Math.PI) {
-    this.phiStart = phiStart
-    this.phiLength = Math.max(0.1, Math.min(Math.PI * 2, phiLength))
-    this.thetaStart = thetaStart
-    this.thetaLength = Math.max(0.1, Math.min(Math.PI, thetaLength))
+  setArc(arc = Math.PI * 2) {
+    this.arc = Math.max(0.1, Math.min(Math.PI * 2, arc))
   }
 
   /**
@@ -125,6 +117,7 @@ export class SphereCommand extends GeometryCommand {
     this.isInteractive = interactive
     this.centerPoint = null
     this.radiusPoint = null
+    this.tubePoint = null
   }
 
   /**
@@ -143,18 +136,30 @@ export class SphereCommand extends GeometryCommand {
       this.setPosition(point.x, point.y, point.z)
       this.notifyPropertyChanged('centerPoint', this.centerPoint)
       return false
-    } else {
-      // Second click - calculate radius and complete
+    } else if (!this.radiusPoint) {
+      // Second click - calculate major radius
       this.radiusPoint = { ...point }
 
       // Calculate distance from center to radius point
       const dx = point.x - this.centerPoint.x
-      const dy = point.y - this.centerPoint.y
       const dz = point.z - this.centerPoint.z
-      const radius = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      const radius = Math.sqrt(dx * dx + dz * dz)
 
-      this.setRadius(Math.max(0.1, radius))
+      this.setDimensions(Math.max(0.1, radius), this.tube)
       this.notifyPropertyChanged('radiusPoint', this.radiusPoint)
+      return false
+    } else {
+      // Third click - set tube radius
+      this.tubePoint = { ...point }
+
+      // Calculate tube radius based on distance from the torus ring
+      const dx = point.x - this.centerPoint.x
+      const dz = point.z - this.centerPoint.z
+      const distanceFromCenter = Math.sqrt(dx * dx + dz * dz)
+      const tube = Math.abs(distanceFromCenter - this.radius)
+
+      this.setDimensions(this.radius, Math.max(0.05, Math.min(tube, this.radius * 0.9)))
+      this.notifyPropertyChanged('tubePoint', this.tubePoint)
       return true // Creation complete
     }
   }
@@ -169,9 +174,10 @@ export class SphereCommand extends GeometryCommand {
     }
 
     return {
-      type: 'sphere',
+      type: 'torus',
       position: this.position,
       radius: this.radius,
+      tube: this.tube,
       material: {
         color: this.color,
         opacity: 0.5, // Semi-transparent for preview
@@ -186,11 +192,21 @@ export class SphereCommand extends GeometryCommand {
    */
   validateParameters() {
     if (this.radius <= 0) {
-      this.error = new Error('Sphere radius must be a positive value')
+      this.error = new Error('Torus radius must be a positive value')
       return false
     }
 
-    if (this.widthSegments < 3 || this.heightSegments < 2) {
+    if (this.tube <= 0) {
+      this.error = new Error('Torus tube radius must be a positive value')
+      return false
+    }
+
+    if (this.tube >= this.radius) {
+      this.error = new Error('Torus tube radius must be smaller than the major radius')
+      return false
+    }
+
+    if (this.radialSegments < 3 || this.tubularSegments < 3) {
       this.error = new Error('Invalid subdivision parameters')
       return false
     }
@@ -208,29 +224,22 @@ export class SphereCommand extends GeometryCommand {
    * @returns {Promise<CommandResult>} Command execution result
    */
   async executeAsync() {
-    // Check if we should use dimension input mode
-    if (this.useDimensionInput) {
-      return await this.executeWithDimensionInput()
-    }
-
     // Validate parameters
     if (!this.validateParameters()) {
       throw this.error
     }
 
     try {
-      // Create SphereVisualObject with proper parameters
-      const visualObject = new SphereVisualObject(null, {
+      // Create TorusVisualObject with proper parameters
+      const visualObject = new TorusVisualObject(null, {
         radius: this.radius,
-        widthSegments: this.widthSegments,
-        heightSegments: this.heightSegments,
-        phiStart: this.phiStart,
-        phiLength: this.phiLength,
-        thetaStart: this.thetaStart,
-        thetaLength: this.thetaLength
+        tube: this.tube,
+        radialSegments: this.radialSegments,
+        tubularSegments: this.tubularSegments,
+        arc: this.arc
       })
 
-      visualObject.name = `Sphere_${Date.now()}`
+      visualObject.name = `Torus_${Date.now()}`
 
       // Configure material properties
       visualObject.setMaterialConfig('default', {
@@ -248,17 +257,21 @@ export class SphereCommand extends GeometryCommand {
       visualObject.scale = { x: 1, y: 1, z: 1 }
 
       // Set properties for the property panel
-      visualObject.setProperty('type', 'Sphere')
+      visualObject.setProperty('type', 'Torus')
       visualObject.setProperty('radius', this.radius)
-      visualObject.setProperty('widthSegments', this.widthSegments)
-      visualObject.setProperty('heightSegments', this.heightSegments)
+      visualObject.setProperty('tube', this.tube)
+      visualObject.setProperty('radialSegments', this.radialSegments)
+      visualObject.setProperty('tubularSegments', this.tubularSegments)
+      visualObject.setProperty('arc', this.arc)
       visualObject.setProperty('color', this.color)
       visualObject.setProperty('opacity', this.opacity)
       visualObject.setProperty('wireframe', this.wireframe)
       visualObject.setProperty('metalness', this.metalness)
       visualObject.setProperty('roughness', this.roughness)
-      visualObject.setProperty('volume', (4/3) * Math.PI * Math.pow(this.radius, 3))
-      visualObject.setProperty('surfaceArea', 4 * Math.PI * Math.pow(this.radius, 2))
+
+      // Calculate volume (torus formula: 2π²Rr² where R=radius, r=tube)
+      const volume = 2 * Math.PI * Math.PI * this.radius * this.tube * this.tube
+      visualObject.setProperty('volume', volume)
 
       // Add to the active document with proper nodeData format
       const nodeData = {
@@ -277,19 +290,20 @@ export class SphereCommand extends GeometryCommand {
       this.addCreatedObject(visualObject)
 
       // Log creation details
-      console.log(`Created sphere: ${visualObject.name}`, {
+      console.log(`Created torus: ${visualObject.name}`, {
         radius: this.radius,
+        tube: this.tube,
         position: this.position,
-        subdivision: { width: this.widthSegments, height: this.heightSegments }
+        subdivision: { radial: this.radialSegments, tubular: this.tubularSegments }
       })
 
       return CommandResult.success(
         visualObject,
-        `Sphere created successfully: ${visualObject.name}`
+        `Torus created successfully: ${visualObject.name}`
       )
 
     } catch (error) {
-      console.error('SphereCommand execution failed:', error)
+      console.error('TorusCommand execution failed:', error)
       throw error
     }
   }
@@ -298,10 +312,11 @@ export class SphereCommand extends GeometryCommand {
    * Called before command execution
    */
   async beforeExecute() {
-    console.log('Starting sphere creation...', {
+    console.log('Starting torus creation...', {
       radius: this.radius,
+      tube: this.tube,
       position: this.position,
-      subdivision: { width: this.widthSegments, height: this.heightSegments },
+      subdivision: { radial: this.radialSegments, tubular: this.tubularSegments },
       interactive: this.isInteractive
     })
   }
@@ -310,12 +325,13 @@ export class SphereCommand extends GeometryCommand {
    * Called after successful command execution
    */
   async afterExecute() {
-    console.log('Sphere creation completed successfully')
+    console.log('Torus creation completed successfully')
 
     // If this was an interactive creation, clean up
     if (this.isInteractive) {
       this.centerPoint = null
       this.radiusPoint = null
+      this.tubePoint = null
     }
   }
 
@@ -325,7 +341,7 @@ export class SphereCommand extends GeometryCommand {
    */
   async onError(error) {
     await super.onError(error)
-    console.error('Sphere creation failed:', error.message)
+    console.error('Torus creation failed:', error.message)
   }
 
   /**
@@ -333,12 +349,13 @@ export class SphereCommand extends GeometryCommand {
    */
   async onCancel() {
     await super.onCancel()
-    console.log('Sphere creation cancelled')
+    console.log('Torus creation cancelled')
 
     // Clean up interactive state
     if (this.isInteractive) {
       this.centerPoint = null
       this.radiusPoint = null
+      this.tubePoint = null
     }
   }
 
@@ -353,64 +370,23 @@ export class SphereCommand extends GeometryCommand {
       ...baseStatus,
       parameters: {
         radius: this.radius,
+        tube: this.tube,
         position: this.position,
         rotation: this.rotation,
-        subdivision: { width: this.widthSegments, height: this.heightSegments },
-        sections: { phiStart: this.phiStart, phiLength: this.phiLength, thetaStart: this.thetaStart, thetaLength: this.thetaLength },
+        subdivision: { radial: this.radialSegments, tubular: this.tubularSegments },
+        arc: this.arc,
         material: { color: this.color, opacity: this.opacity, wireframe: this.wireframe, metalness: this.metalness, roughness: this.roughness }
       },
       interactive: {
         isInteractive: this.isInteractive,
         centerPoint: this.centerPoint,
-        radiusPoint: this.radiusPoint
+        radiusPoint: this.radiusPoint,
+        tubePoint: this.tubePoint
       },
       createdObjects: this.createdObjects.length
     }
   }
-
-  /**
-   * Execute command with dimension input dialogs
-   * @returns {Promise<CommandResult>}
-   */
-  async executeWithDimensionInput() {
-    try {
-      console.log('Creating sphere with dimension input...')
-
-      // Initialize interactive input
-      const InteractiveInput = (await import('../cad-core/command/InteractiveInput.js')).InteractiveInput
-      const interactiveInput = new InteractiveInput(this.application)
-
-      // Get radius using custom dialog
-      const radius = await interactiveInput.getSingleDimension(
-        'Create Sphere - Enter Radius',
-        'Radius',
-        this.radius,
-        { min: 0.1, max: 50 }
-      )
-
-      if (this.isCancelled) {
-        return CommandResult.error('Sphere creation cancelled by user')
-      }
-
-      // Set the radius
-      this.setRadius(radius)
-
-      // Temporarily disable dimension input to avoid recursion
-      this.useDimensionInput = false
-
-      // Create the sphere using the existing logic
-      const result = await this.executeAsync()
-
-      // Restore dimension input flag
-      this.useDimensionInput = true
-
-      return result
-
-    } catch (error) {
-      console.error('SphereCommand dimension input failed:', error)
-      throw error
-    }
-  }
 }
 
-export default SphereCommand
+export default TorusCommand
+

@@ -329,3 +329,4 @@ describe('CommandResult', () => {
     expect(result.timestamp).toBeGreaterThan(0)
   })
 })
+

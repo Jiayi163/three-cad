@@ -1,64 +1,64 @@
 /**
- * SphereCommand - Creates a 3D sphere geometry
+ * PlaneCommand - Creates a 3D plane geometry
  *
  * Demonstrates parametric geometry creation with
- * customizable subdivision levels and material properties
+ * customizable dimensions and material properties
  */
 
 import { GeometryCommand, CommandResult } from '../cad-core/command/Command.js'
-import { SphereVisualObject } from '../cad-three/BasicShapes.js'
+import { PlaneVisualObject } from '../cad-three/BasicShapes.js'
 import { markRaw } from 'vue'
 
 /**
- * Command to create a sphere geometry in the 3D scene
+ * Command to create a plane geometry in the 3D scene
  */
-export class SphereCommand extends GeometryCommand {
+export class PlaneCommand extends GeometryCommand {
   constructor() {
     super()
 
-    this.name = 'CreateSphere'
-    this.description = 'Create a 3D sphere geometry'
+    this.name = 'CreatePlane'
+    this.description = 'Create a 3D plane geometry'
     this.category = 'Geometry'
 
-    // Sphere parameters with defaults
-    this.radius = 1.0
+    // Plane parameters with defaults
+    this.width = 2.0
+    this.height = 2.0
     this.position = { x: 0, y: 0, z: 0 }
     this.rotation = { x: 0, y: 0, z: 0 }
 
     // Subdivision parameters for geometry quality
-    this.widthSegments = 32
-    this.heightSegments = 16
-    this.phiStart = 0
-    this.phiLength = Math.PI * 2
-    this.thetaStart = 0
-    this.thetaLength = Math.PI
+    this.widthSegments = 1
+    this.heightSegments = 1
 
     // Material properties
-    this.color = '#2196F3'
+    this.color = '#9C27B0'
     this.opacity = 1.0
     this.wireframe = false
     this.metalness = 0.0
     this.roughness = 0.5
+    this.side = 'DoubleSide' // Show both sides of the plane
 
     // Interactive creation state
     this.isInteractive = false
-    this.centerPoint = null
-    this.radiusPoint = null
+    this.firstCorner = null
+    this.secondCorner = null
 
     // Dimension input mode
     this.useDimensionInput = false
   }
 
   /**
-   * Set sphere radius
-   * @param {number} radius - Sphere radius
+   * Set plane dimensions
+   * @param {number} width - Plane width
+   * @param {number} height - Plane height
    */
-  setRadius(radius) {
-    this.radius = Math.max(0.1, radius)
+  setDimensions(width, height) {
+    this.width = Math.max(0.1, width)
+    this.height = Math.max(0.1, height)
   }
 
   /**
-   * Set sphere position
+   * Set plane position
    * @param {number} x - X coordinate
    * @param {number} y - Y coordinate
    * @param {number} z - Z coordinate
@@ -68,7 +68,7 @@ export class SphereCommand extends GeometryCommand {
   }
 
   /**
-   * Set sphere rotation
+   * Set plane rotation
    * @param {number} x - X rotation in radians
    * @param {number} y - Y rotation in radians
    * @param {number} z - Z rotation in radians
@@ -79,26 +79,12 @@ export class SphereCommand extends GeometryCommand {
 
   /**
    * Set geometry subdivision parameters
-   * @param {number} widthSegments - Number of horizontal segments
-   * @param {number} heightSegments - Number of vertical segments
+   * @param {number} widthSegments - Number of width segments
+   * @param {number} heightSegments - Number of height segments
    */
-  setSubdivision(widthSegments = 32, heightSegments = 16) {
-    this.widthSegments = Math.max(3, Math.min(64, widthSegments))
-    this.heightSegments = Math.max(2, Math.min(32, heightSegments))
-  }
-
-  /**
-   * Set sphere section parameters for partial spheres
-   * @param {number} phiStart - Start angle for horizontal sweep
-   * @param {number} phiLength - Length of horizontal sweep
-   * @param {number} thetaStart - Start angle for vertical sweep
-   * @param {number} thetaLength - Length of vertical sweep
-   */
-  setSectionParameters(phiStart = 0, phiLength = Math.PI * 2, thetaStart = 0, thetaLength = Math.PI) {
-    this.phiStart = phiStart
-    this.phiLength = Math.max(0.1, Math.min(Math.PI * 2, phiLength))
-    this.thetaStart = thetaStart
-    this.thetaLength = Math.max(0.1, Math.min(Math.PI, thetaLength))
+  setSubdivision(widthSegments = 1, heightSegments = 1) {
+    this.widthSegments = Math.max(1, Math.min(32, widthSegments))
+    this.heightSegments = Math.max(1, Math.min(32, heightSegments))
   }
 
   /**
@@ -108,13 +94,15 @@ export class SphereCommand extends GeometryCommand {
    * @param {boolean} wireframe - Whether to show wireframe
    * @param {number} metalness - Metalness value (0-1)
    * @param {number} roughness - Roughness value (0-1)
+   * @param {string} side - Material side ('FrontSide', 'BackSide', 'DoubleSide')
    */
-  setMaterial(color, opacity = 1.0, wireframe = false, metalness = 0.0, roughness = 0.5) {
+  setMaterial(color, opacity = 1.0, wireframe = false, metalness = 0.0, roughness = 0.5, side = 'DoubleSide') {
     this.color = color
     this.opacity = Math.max(0, Math.min(1, opacity))
     this.wireframe = wireframe
     this.metalness = Math.max(0, Math.min(1, metalness))
     this.roughness = Math.max(0, Math.min(1, roughness))
+    this.side = side
   }
 
   /**
@@ -123,8 +111,8 @@ export class SphereCommand extends GeometryCommand {
    */
   setInteractive(interactive = true) {
     this.isInteractive = interactive
-    this.centerPoint = null
-    this.radiusPoint = null
+    this.firstCorner = null
+    this.secondCorner = null
   }
 
   /**
@@ -137,24 +125,28 @@ export class SphereCommand extends GeometryCommand {
       return false
     }
 
-    if (!this.centerPoint) {
-      // First click - set center point
-      this.centerPoint = { ...point }
-      this.setPosition(point.x, point.y, point.z)
-      this.notifyPropertyChanged('centerPoint', this.centerPoint)
+    if (!this.firstCorner) {
+      // First click - set first corner
+      this.firstCorner = { ...point }
+      this.notifyPropertyChanged('firstCorner', this.firstCorner)
       return false
     } else {
-      // Second click - calculate radius and complete
-      this.radiusPoint = { ...point }
+      // Second click - calculate dimensions and complete
+      this.secondCorner = { ...point }
 
-      // Calculate distance from center to radius point
-      const dx = point.x - this.centerPoint.x
-      const dy = point.y - this.centerPoint.y
-      const dz = point.z - this.centerPoint.z
-      const radius = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      // Calculate dimensions from two corners
+      const width = Math.abs(point.x - this.firstCorner.x)
+      const height = Math.abs(point.z - this.firstCorner.z) // Use Z for depth in XZ plane
 
-      this.setRadius(Math.max(0.1, radius))
-      this.notifyPropertyChanged('radiusPoint', this.radiusPoint)
+      this.setDimensions(Math.max(0.1, width), Math.max(0.1, height))
+
+      // Calculate center position
+      const centerX = (this.firstCorner.x + point.x) / 2
+      const centerY = (this.firstCorner.y + point.y) / 2
+      const centerZ = (this.firstCorner.z + point.z) / 2
+
+      this.setPosition(centerX, centerY, centerZ)
+      this.notifyPropertyChanged('secondCorner', this.secondCorner)
       return true // Creation complete
     }
   }
@@ -164,14 +156,15 @@ export class SphereCommand extends GeometryCommand {
    * @returns {Object|null} Preview geometry data
    */
   getPreviewGeometry() {
-    if (!this.isInteractive || !this.centerPoint) {
+    if (!this.isInteractive || !this.firstCorner) {
       return null
     }
 
     return {
-      type: 'sphere',
+      type: 'plane',
       position: this.position,
-      radius: this.radius,
+      width: this.width,
+      height: this.height,
       material: {
         color: this.color,
         opacity: 0.5, // Semi-transparent for preview
@@ -185,12 +178,12 @@ export class SphereCommand extends GeometryCommand {
    * @returns {boolean} True if parameters are valid
    */
   validateParameters() {
-    if (this.radius <= 0) {
-      this.error = new Error('Sphere radius must be a positive value')
+    if (this.width <= 0 || this.height <= 0) {
+      this.error = new Error('Plane dimensions must be positive values')
       return false
     }
 
-    if (this.widthSegments < 3 || this.heightSegments < 2) {
+    if (this.widthSegments < 1 || this.heightSegments < 1) {
       this.error = new Error('Invalid subdivision parameters')
       return false
     }
@@ -219,18 +212,15 @@ export class SphereCommand extends GeometryCommand {
     }
 
     try {
-      // Create SphereVisualObject with proper parameters
-      const visualObject = new SphereVisualObject(null, {
-        radius: this.radius,
+      // Create PlaneVisualObject with proper parameters
+      const visualObject = new PlaneVisualObject(null, {
+        width: this.width,
+        height: this.height,
         widthSegments: this.widthSegments,
-        heightSegments: this.heightSegments,
-        phiStart: this.phiStart,
-        phiLength: this.phiLength,
-        thetaStart: this.thetaStart,
-        thetaLength: this.thetaLength
+        heightSegments: this.heightSegments
       })
 
-      visualObject.name = `Sphere_${Date.now()}`
+      visualObject.name = `Plane_${Date.now()}`
 
       // Configure material properties
       visualObject.setMaterialConfig('default', {
@@ -239,7 +229,8 @@ export class SphereCommand extends GeometryCommand {
         transparent: this.opacity < 1.0,
         wireframe: this.wireframe,
         metalness: this.metalness,
-        roughness: this.roughness
+        roughness: this.roughness,
+        side: this.side === 'DoubleSide' ? 2 : (this.side === 'BackSide' ? 1 : 0) // THREE.DoubleSide = 2
       })
 
       // Set transform properties
@@ -248,8 +239,9 @@ export class SphereCommand extends GeometryCommand {
       visualObject.scale = { x: 1, y: 1, z: 1 }
 
       // Set properties for the property panel
-      visualObject.setProperty('type', 'Sphere')
-      visualObject.setProperty('radius', this.radius)
+      visualObject.setProperty('type', 'Plane')
+      visualObject.setProperty('width', this.width)
+      visualObject.setProperty('height', this.height)
       visualObject.setProperty('widthSegments', this.widthSegments)
       visualObject.setProperty('heightSegments', this.heightSegments)
       visualObject.setProperty('color', this.color)
@@ -257,8 +249,8 @@ export class SphereCommand extends GeometryCommand {
       visualObject.setProperty('wireframe', this.wireframe)
       visualObject.setProperty('metalness', this.metalness)
       visualObject.setProperty('roughness', this.roughness)
-      visualObject.setProperty('volume', (4/3) * Math.PI * Math.pow(this.radius, 3))
-      visualObject.setProperty('surfaceArea', 4 * Math.PI * Math.pow(this.radius, 2))
+      visualObject.setProperty('side', this.side)
+      visualObject.setProperty('area', this.width * this.height)
 
       // Add to the active document with proper nodeData format
       const nodeData = {
@@ -277,19 +269,20 @@ export class SphereCommand extends GeometryCommand {
       this.addCreatedObject(visualObject)
 
       // Log creation details
-      console.log(`Created sphere: ${visualObject.name}`, {
-        radius: this.radius,
+      console.log(`Created plane: ${visualObject.name}`, {
+        width: this.width,
+        height: this.height,
         position: this.position,
         subdivision: { width: this.widthSegments, height: this.heightSegments }
       })
 
       return CommandResult.success(
         visualObject,
-        `Sphere created successfully: ${visualObject.name}`
+        `Plane created successfully: ${visualObject.name}`
       )
 
     } catch (error) {
-      console.error('SphereCommand execution failed:', error)
+      console.error('PlaneCommand execution failed:', error)
       throw error
     }
   }
@@ -298,8 +291,9 @@ export class SphereCommand extends GeometryCommand {
    * Called before command execution
    */
   async beforeExecute() {
-    console.log('Starting sphere creation...', {
-      radius: this.radius,
+    console.log('Starting plane creation...', {
+      width: this.width,
+      height: this.height,
       position: this.position,
       subdivision: { width: this.widthSegments, height: this.heightSegments },
       interactive: this.isInteractive
@@ -310,12 +304,12 @@ export class SphereCommand extends GeometryCommand {
    * Called after successful command execution
    */
   async afterExecute() {
-    console.log('Sphere creation completed successfully')
+    console.log('Plane creation completed successfully')
 
     // If this was an interactive creation, clean up
     if (this.isInteractive) {
-      this.centerPoint = null
-      this.radiusPoint = null
+      this.firstCorner = null
+      this.secondCorner = null
     }
   }
 
@@ -325,7 +319,7 @@ export class SphereCommand extends GeometryCommand {
    */
   async onError(error) {
     await super.onError(error)
-    console.error('Sphere creation failed:', error.message)
+    console.error('Plane creation failed:', error.message)
   }
 
   /**
@@ -333,12 +327,12 @@ export class SphereCommand extends GeometryCommand {
    */
   async onCancel() {
     await super.onCancel()
-    console.log('Sphere creation cancelled')
+    console.log('Plane creation cancelled')
 
     // Clean up interactive state
     if (this.isInteractive) {
-      this.centerPoint = null
-      this.radiusPoint = null
+      this.firstCorner = null
+      this.secondCorner = null
     }
   }
 
@@ -352,17 +346,24 @@ export class SphereCommand extends GeometryCommand {
     return {
       ...baseStatus,
       parameters: {
-        radius: this.radius,
+        width: this.width,
+        height: this.height,
         position: this.position,
         rotation: this.rotation,
         subdivision: { width: this.widthSegments, height: this.heightSegments },
-        sections: { phiStart: this.phiStart, phiLength: this.phiLength, thetaStart: this.thetaStart, thetaLength: this.thetaLength },
-        material: { color: this.color, opacity: this.opacity, wireframe: this.wireframe, metalness: this.metalness, roughness: this.roughness }
+        material: {
+          color: this.color,
+          opacity: this.opacity,
+          wireframe: this.wireframe,
+          metalness: this.metalness,
+          roughness: this.roughness,
+          side: this.side
+        }
       },
       interactive: {
         isInteractive: this.isInteractive,
-        centerPoint: this.centerPoint,
-        radiusPoint: this.radiusPoint
+        firstCorner: this.firstCorner,
+        secondCorner: this.secondCorner
       },
       createdObjects: this.createdObjects.length
     }
@@ -374,31 +375,31 @@ export class SphereCommand extends GeometryCommand {
    */
   async executeWithDimensionInput() {
     try {
-      console.log('Creating sphere with dimension input...')
+      console.log('Creating plane with dimension input...')
 
       // Initialize interactive input
       const InteractiveInput = (await import('../cad-core/command/InteractiveInput.js')).InteractiveInput
       const interactiveInput = new InteractiveInput(this.application)
 
-      // Get radius using custom dialog
-      const radius = await interactiveInput.getSingleDimension(
-        'Create Sphere - Enter Radius',
-        'Radius',
-        this.radius,
-        { min: 0.1, max: 50 }
+      // Get plane dimensions (width and height)
+      const dimensions = await interactiveInput.getTwoDimensions(
+        'Create Plane - Enter Dimensions',
+        { x: this.width, y: this.height },
+        { x: 'Length', y: 'Width' },
+        { min: 0.1, max: 100 }
       )
 
       if (this.isCancelled) {
-        return CommandResult.error('Sphere creation cancelled by user')
+        return CommandResult.error('Plane creation cancelled by user')
       }
 
-      // Set the radius
-      this.setRadius(radius)
+      // Set the dimensions
+      this.setDimensions(dimensions.x, dimensions.y)
 
       // Temporarily disable dimension input to avoid recursion
       this.useDimensionInput = false
 
-      // Create the sphere using the existing logic
+      // Create the plane using the existing logic
       const result = await this.executeAsync()
 
       // Restore dimension input flag
@@ -407,10 +408,11 @@ export class SphereCommand extends GeometryCommand {
       return result
 
     } catch (error) {
-      console.error('SphereCommand dimension input failed:', error)
+      console.error('PlaneCommand dimension input failed:', error)
       throw error
     }
   }
 }
 
-export default SphereCommand
+export default PlaneCommand
+

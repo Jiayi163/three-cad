@@ -1,5 +1,5 @@
 // CAD UI Package - Vue.js UI Components for CAD Application
-// 
+//
 // This package provides UI components specifically designed for CAD applications,
 // including toolbars, panels, property editors, and other specialized interfaces.
 
@@ -9,6 +9,7 @@ export { default as PropertyPanel } from './components/PropertyPanel.vue'
 export { default as ObjectHierarchy } from './components/ObjectHierarchy.vue'
 export { default as ToolPalette } from './components/ToolPalette.vue'
 export { default as StatusBar } from './components/StatusBar.vue'
+export { default as SelectionTools } from './components/SelectionTools.vue'
 
 // Panel components
 export { default as ResizablePanel } from './components/panels/ResizablePanel.vue'

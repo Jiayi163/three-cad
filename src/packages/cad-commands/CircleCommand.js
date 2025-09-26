@@ -1,40 +1,37 @@
 /**
- * SphereCommand - Creates a 3D sphere geometry
+ * CircleCommand - Creates a 3D circle geometry
  *
- * Demonstrates parametric geometry creation with
- * customizable subdivision levels and material properties
+ * Demonstrates parametric circle creation with
+ * customizable radius and material properties
  */
 
 import { GeometryCommand, CommandResult } from '../cad-core/command/Command.js'
-import { SphereVisualObject } from '../cad-three/BasicShapes.js'
+import { CircleVisualObject } from '../cad-three/BasicShapes.js'
 import { markRaw } from 'vue'
 
 /**
- * Command to create a sphere geometry in the 3D scene
+ * Command to create a circle geometry in the 3D scene
  */
-export class SphereCommand extends GeometryCommand {
+export class CircleCommand extends GeometryCommand {
   constructor() {
     super()
 
-    this.name = 'CreateSphere'
-    this.description = 'Create a 3D sphere geometry'
+    this.name = 'CreateCircle'
+    this.description = 'Create a 3D circle geometry'
     this.category = 'Geometry'
 
-    // Sphere parameters with defaults
+    // Circle parameters with defaults
     this.radius = 1.0
     this.position = { x: 0, y: 0, z: 0 }
     this.rotation = { x: 0, y: 0, z: 0 }
 
     // Subdivision parameters for geometry quality
-    this.widthSegments = 32
-    this.heightSegments = 16
-    this.phiStart = 0
-    this.phiLength = Math.PI * 2
+    this.segments = 32
     this.thetaStart = 0
-    this.thetaLength = Math.PI
+    this.thetaLength = Math.PI * 2
 
     // Material properties
-    this.color = '#2196F3'
+    this.color = '#FFEB3B'
     this.opacity = 1.0
     this.wireframe = false
     this.metalness = 0.0
@@ -44,21 +41,18 @@ export class SphereCommand extends GeometryCommand {
     this.isInteractive = false
     this.centerPoint = null
     this.radiusPoint = null
-
-    // Dimension input mode
-    this.useDimensionInput = false
   }
 
   /**
-   * Set sphere radius
-   * @param {number} radius - Sphere radius
+   * Set circle radius
+   * @param {number} radius - Circle radius
    */
   setRadius(radius) {
     this.radius = Math.max(0.1, radius)
   }
 
   /**
-   * Set sphere position
+   * Set circle position
    * @param {number} x - X coordinate
    * @param {number} y - Y coordinate
    * @param {number} z - Z coordinate
@@ -68,7 +62,7 @@ export class SphereCommand extends GeometryCommand {
   }
 
   /**
-   * Set sphere rotation
+   * Set circle rotation
    * @param {number} x - X rotation in radians
    * @param {number} y - Y rotation in radians
    * @param {number} z - Z rotation in radians
@@ -79,26 +73,20 @@ export class SphereCommand extends GeometryCommand {
 
   /**
    * Set geometry subdivision parameters
-   * @param {number} widthSegments - Number of horizontal segments
-   * @param {number} heightSegments - Number of vertical segments
+   * @param {number} segments - Number of segments
    */
-  setSubdivision(widthSegments = 32, heightSegments = 16) {
-    this.widthSegments = Math.max(3, Math.min(64, widthSegments))
-    this.heightSegments = Math.max(2, Math.min(32, heightSegments))
+  setSubdivision(segments = 32) {
+    this.segments = Math.max(3, Math.min(64, segments))
   }
 
   /**
-   * Set sphere section parameters for partial spheres
-   * @param {number} phiStart - Start angle for horizontal sweep
-   * @param {number} phiLength - Length of horizontal sweep
-   * @param {number} thetaStart - Start angle for vertical sweep
-   * @param {number} thetaLength - Length of vertical sweep
+   * Set circle section parameters for partial circles
+   * @param {number} thetaStart - Start angle
+   * @param {number} thetaLength - Arc length
    */
-  setSectionParameters(phiStart = 0, phiLength = Math.PI * 2, thetaStart = 0, thetaLength = Math.PI) {
-    this.phiStart = phiStart
-    this.phiLength = Math.max(0.1, Math.min(Math.PI * 2, phiLength))
+  setSectionParameters(thetaStart = 0, thetaLength = Math.PI * 2) {
     this.thetaStart = thetaStart
-    this.thetaLength = Math.max(0.1, Math.min(Math.PI, thetaLength))
+    this.thetaLength = Math.max(0.1, Math.min(Math.PI * 2, thetaLength))
   }
 
   /**
@@ -169,7 +157,7 @@ export class SphereCommand extends GeometryCommand {
     }
 
     return {
-      type: 'sphere',
+      type: 'circle',
       position: this.position,
       radius: this.radius,
       material: {
@@ -186,11 +174,11 @@ export class SphereCommand extends GeometryCommand {
    */
   validateParameters() {
     if (this.radius <= 0) {
-      this.error = new Error('Sphere radius must be a positive value')
+      this.error = new Error('Circle radius must be a positive value')
       return false
     }
 
-    if (this.widthSegments < 3 || this.heightSegments < 2) {
+    if (this.segments < 3) {
       this.error = new Error('Invalid subdivision parameters')
       return false
     }
@@ -208,29 +196,21 @@ export class SphereCommand extends GeometryCommand {
    * @returns {Promise<CommandResult>} Command execution result
    */
   async executeAsync() {
-    // Check if we should use dimension input mode
-    if (this.useDimensionInput) {
-      return await this.executeWithDimensionInput()
-    }
-
     // Validate parameters
     if (!this.validateParameters()) {
       throw this.error
     }
 
     try {
-      // Create SphereVisualObject with proper parameters
-      const visualObject = new SphereVisualObject(null, {
+      // Create CircleVisualObject with proper parameters
+      const visualObject = new CircleVisualObject(null, {
         radius: this.radius,
-        widthSegments: this.widthSegments,
-        heightSegments: this.heightSegments,
-        phiStart: this.phiStart,
-        phiLength: this.phiLength,
+        segments: this.segments,
         thetaStart: this.thetaStart,
         thetaLength: this.thetaLength
       })
 
-      visualObject.name = `Sphere_${Date.now()}`
+      visualObject.name = `Circle_${Date.now()}`
 
       // Configure material properties
       visualObject.setMaterialConfig('default', {
@@ -248,17 +228,22 @@ export class SphereCommand extends GeometryCommand {
       visualObject.scale = { x: 1, y: 1, z: 1 }
 
       // Set properties for the property panel
-      visualObject.setProperty('type', 'Sphere')
+      visualObject.setProperty('type', 'Circle')
       visualObject.setProperty('radius', this.radius)
-      visualObject.setProperty('widthSegments', this.widthSegments)
-      visualObject.setProperty('heightSegments', this.heightSegments)
+      visualObject.setProperty('segments', this.segments)
+      visualObject.setProperty('thetaStart', this.thetaStart)
+      visualObject.setProperty('thetaLength', this.thetaLength)
       visualObject.setProperty('color', this.color)
       visualObject.setProperty('opacity', this.opacity)
       visualObject.setProperty('wireframe', this.wireframe)
       visualObject.setProperty('metalness', this.metalness)
       visualObject.setProperty('roughness', this.roughness)
-      visualObject.setProperty('volume', (4/3) * Math.PI * Math.pow(this.radius, 3))
-      visualObject.setProperty('surfaceArea', 4 * Math.PI * Math.pow(this.radius, 2))
+
+      // Calculate area and circumference
+      const area = Math.PI * this.radius * this.radius
+      const circumference = 2 * Math.PI * this.radius
+      visualObject.setProperty('area', area)
+      visualObject.setProperty('circumference', circumference)
 
       // Add to the active document with proper nodeData format
       const nodeData = {
@@ -277,19 +262,19 @@ export class SphereCommand extends GeometryCommand {
       this.addCreatedObject(visualObject)
 
       // Log creation details
-      console.log(`Created sphere: ${visualObject.name}`, {
+      console.log(`Created circle: ${visualObject.name}`, {
         radius: this.radius,
         position: this.position,
-        subdivision: { width: this.widthSegments, height: this.heightSegments }
+        subdivision: this.segments
       })
 
       return CommandResult.success(
         visualObject,
-        `Sphere created successfully: ${visualObject.name}`
+        `Circle created successfully: ${visualObject.name}`
       )
 
     } catch (error) {
-      console.error('SphereCommand execution failed:', error)
+      console.error('CircleCommand execution failed:', error)
       throw error
     }
   }
@@ -298,10 +283,10 @@ export class SphereCommand extends GeometryCommand {
    * Called before command execution
    */
   async beforeExecute() {
-    console.log('Starting sphere creation...', {
+    console.log('Starting circle creation...', {
       radius: this.radius,
       position: this.position,
-      subdivision: { width: this.widthSegments, height: this.heightSegments },
+      subdivision: this.segments,
       interactive: this.isInteractive
     })
   }
@@ -310,7 +295,7 @@ export class SphereCommand extends GeometryCommand {
    * Called after successful command execution
    */
   async afterExecute() {
-    console.log('Sphere creation completed successfully')
+    console.log('Circle creation completed successfully')
 
     // If this was an interactive creation, clean up
     if (this.isInteractive) {
@@ -325,7 +310,7 @@ export class SphereCommand extends GeometryCommand {
    */
   async onError(error) {
     await super.onError(error)
-    console.error('Sphere creation failed:', error.message)
+    console.error('Circle creation failed:', error.message)
   }
 
   /**
@@ -333,7 +318,7 @@ export class SphereCommand extends GeometryCommand {
    */
   async onCancel() {
     await super.onCancel()
-    console.log('Sphere creation cancelled')
+    console.log('Circle creation cancelled')
 
     // Clean up interactive state
     if (this.isInteractive) {
@@ -355,8 +340,8 @@ export class SphereCommand extends GeometryCommand {
         radius: this.radius,
         position: this.position,
         rotation: this.rotation,
-        subdivision: { width: this.widthSegments, height: this.heightSegments },
-        sections: { phiStart: this.phiStart, phiLength: this.phiLength, thetaStart: this.thetaStart, thetaLength: this.thetaLength },
+        subdivision: this.segments,
+        sections: { thetaStart: this.thetaStart, thetaLength: this.thetaLength },
         material: { color: this.color, opacity: this.opacity, wireframe: this.wireframe, metalness: this.metalness, roughness: this.roughness }
       },
       interactive: {
@@ -367,50 +352,7 @@ export class SphereCommand extends GeometryCommand {
       createdObjects: this.createdObjects.length
     }
   }
-
-  /**
-   * Execute command with dimension input dialogs
-   * @returns {Promise<CommandResult>}
-   */
-  async executeWithDimensionInput() {
-    try {
-      console.log('Creating sphere with dimension input...')
-
-      // Initialize interactive input
-      const InteractiveInput = (await import('../cad-core/command/InteractiveInput.js')).InteractiveInput
-      const interactiveInput = new InteractiveInput(this.application)
-
-      // Get radius using custom dialog
-      const radius = await interactiveInput.getSingleDimension(
-        'Create Sphere - Enter Radius',
-        'Radius',
-        this.radius,
-        { min: 0.1, max: 50 }
-      )
-
-      if (this.isCancelled) {
-        return CommandResult.error('Sphere creation cancelled by user')
-      }
-
-      // Set the radius
-      this.setRadius(radius)
-
-      // Temporarily disable dimension input to avoid recursion
-      this.useDimensionInput = false
-
-      // Create the sphere using the existing logic
-      const result = await this.executeAsync()
-
-      // Restore dimension input flag
-      this.useDimensionInput = true
-
-      return result
-
-    } catch (error) {
-      console.error('SphereCommand dimension input failed:', error)
-      throw error
-    }
-  }
 }
 
-export default SphereCommand
+export default CircleCommand
+

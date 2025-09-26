@@ -35,6 +35,9 @@ export class ThreeView extends Observable {
     this.selectedObjects = new Set()
     this.hoveredObject = null
 
+    // Selection system integration
+    this.selectionManager = null
+
     // Scene objects
     this.visualObjects = new Map()  // Maps document nodes to Three.js objects
     this.visualObjectInstances = new Map()  // Maps nodeId to VisualObject instances
@@ -392,6 +395,15 @@ export class ThreeView extends Observable {
   }
 
   /**
+   * Set selection manager for advanced selection features
+   * @param {SelectionManager} selectionManager - The selection manager instance
+   */
+  setSelectionManager(selectionManager) {
+    this.selectionManager = selectionManager
+    console.log('Selection manager integrated with ThreeView')
+  }
+
+  /**
    * Select object
    */
   _selectObject(object, multiSelect = false) {
@@ -406,7 +418,13 @@ export class ThreeView extends Observable {
       // Update document selection if possible
       // Skip demo objects as they are not real document nodes
       if (this.document && object.userData.nodeId && !object.userData.nodeId.startsWith('demo-')) {
-        this.document.selectNode(object.userData.nodeId, multiSelect)
+        // Find the actual node object by ID
+        const node = this.document.findNodeById(object.userData.nodeId)
+        if (node) {
+          this.document.selectNode(node, multiSelect)
+        } else {
+          console.warn('Could not find document node for ID:', object.userData.nodeId)
+        }
       }
     }
 

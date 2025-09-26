@@ -313,3 +313,4 @@ export class CommandResult {
     return new CommandResult(false, data, message)
   }
 }
+

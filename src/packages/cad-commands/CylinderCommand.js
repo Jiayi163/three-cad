@@ -1,40 +1,41 @@
 /**
- * SphereCommand - Creates a 3D sphere geometry
+ * CylinderCommand - Creates a 3D cylinder geometry
  *
  * Demonstrates parametric geometry creation with
- * customizable subdivision levels and material properties
+ * customizable dimensions and material properties
  */
 
 import { GeometryCommand, CommandResult } from '../cad-core/command/Command.js'
-import { SphereVisualObject } from '../cad-three/BasicShapes.js'
+import { CylinderVisualObject } from '../cad-three/BasicShapes.js'
 import { markRaw } from 'vue'
 
 /**
- * Command to create a sphere geometry in the 3D scene
+ * Command to create a cylinder geometry in the 3D scene
  */
-export class SphereCommand extends GeometryCommand {
+export class CylinderCommand extends GeometryCommand {
   constructor() {
     super()
 
-    this.name = 'CreateSphere'
-    this.description = 'Create a 3D sphere geometry'
+    this.name = 'CreateCylinder'
+    this.description = 'Create a 3D cylinder geometry'
     this.category = 'Geometry'
 
-    // Sphere parameters with defaults
-    this.radius = 1.0
+    // Cylinder parameters with defaults
+    this.radiusTop = 1.0
+    this.radiusBottom = 1.0
+    this.height = 2.0
     this.position = { x: 0, y: 0, z: 0 }
     this.rotation = { x: 0, y: 0, z: 0 }
 
     // Subdivision parameters for geometry quality
-    this.widthSegments = 32
-    this.heightSegments = 16
-    this.phiStart = 0
-    this.phiLength = Math.PI * 2
+    this.radialSegments = 32
+    this.heightSegments = 1
+    this.openEnded = false
     this.thetaStart = 0
-    this.thetaLength = Math.PI
+    this.thetaLength = Math.PI * 2
 
     // Material properties
-    this.color = '#2196F3'
+    this.color = '#FF9800'
     this.opacity = 1.0
     this.wireframe = false
     this.metalness = 0.0
@@ -44,21 +45,26 @@ export class SphereCommand extends GeometryCommand {
     this.isInteractive = false
     this.centerPoint = null
     this.radiusPoint = null
+    this.heightPoint = null
 
     // Dimension input mode
     this.useDimensionInput = false
   }
 
   /**
-   * Set sphere radius
-   * @param {number} radius - Sphere radius
+   * Set cylinder dimensions
+   * @param {number} radiusTop - Top radius
+   * @param {number} radiusBottom - Bottom radius
+   * @param {number} height - Cylinder height
    */
-  setRadius(radius) {
-    this.radius = Math.max(0.1, radius)
+  setDimensions(radiusTop, radiusBottom, height) {
+    this.radiusTop = Math.max(0.1, radiusTop)
+    this.radiusBottom = Math.max(0.1, radiusBottom)
+    this.height = Math.max(0.1, height)
   }
 
   /**
-   * Set sphere position
+   * Set cylinder position
    * @param {number} x - X coordinate
    * @param {number} y - Y coordinate
    * @param {number} z - Z coordinate
@@ -68,7 +74,7 @@ export class SphereCommand extends GeometryCommand {
   }
 
   /**
-   * Set sphere rotation
+   * Set cylinder rotation
    * @param {number} x - X rotation in radians
    * @param {number} y - Y rotation in radians
    * @param {number} z - Z rotation in radians
@@ -79,26 +85,24 @@ export class SphereCommand extends GeometryCommand {
 
   /**
    * Set geometry subdivision parameters
-   * @param {number} widthSegments - Number of horizontal segments
-   * @param {number} heightSegments - Number of vertical segments
+   * @param {number} radialSegments - Number of radial segments
+   * @param {number} heightSegments - Number of height segments
    */
-  setSubdivision(widthSegments = 32, heightSegments = 16) {
-    this.widthSegments = Math.max(3, Math.min(64, widthSegments))
-    this.heightSegments = Math.max(2, Math.min(32, heightSegments))
+  setSubdivision(radialSegments = 32, heightSegments = 1) {
+    this.radialSegments = Math.max(3, Math.min(64, radialSegments))
+    this.heightSegments = Math.max(1, Math.min(32, heightSegments))
   }
 
   /**
-   * Set sphere section parameters for partial spheres
-   * @param {number} phiStart - Start angle for horizontal sweep
-   * @param {number} phiLength - Length of horizontal sweep
-   * @param {number} thetaStart - Start angle for vertical sweep
-   * @param {number} thetaLength - Length of vertical sweep
+   * Set cylinder section parameters for partial cylinders
+   * @param {number} thetaStart - Start angle for sweep
+   * @param {number} thetaLength - Length of sweep
+   * @param {boolean} openEnded - Whether cylinder is open-ended
    */
-  setSectionParameters(phiStart = 0, phiLength = Math.PI * 2, thetaStart = 0, thetaLength = Math.PI) {
-    this.phiStart = phiStart
-    this.phiLength = Math.max(0.1, Math.min(Math.PI * 2, phiLength))
+  setSectionParameters(thetaStart = 0, thetaLength = Math.PI * 2, openEnded = false) {
     this.thetaStart = thetaStart
-    this.thetaLength = Math.max(0.1, Math.min(Math.PI, thetaLength))
+    this.thetaLength = Math.max(0.1, Math.min(Math.PI * 2, thetaLength))
+    this.openEnded = openEnded
   }
 
   /**
@@ -125,6 +129,7 @@ export class SphereCommand extends GeometryCommand {
     this.isInteractive = interactive
     this.centerPoint = null
     this.radiusPoint = null
+    this.heightPoint = null
   }
 
   /**
@@ -143,18 +148,24 @@ export class SphereCommand extends GeometryCommand {
       this.setPosition(point.x, point.y, point.z)
       this.notifyPropertyChanged('centerPoint', this.centerPoint)
       return false
-    } else {
-      // Second click - calculate radius and complete
+    } else if (!this.radiusPoint) {
+      // Second click - calculate radius
       this.radiusPoint = { ...point }
 
       // Calculate distance from center to radius point
       const dx = point.x - this.centerPoint.x
-      const dy = point.y - this.centerPoint.y
       const dz = point.z - this.centerPoint.z
-      const radius = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      const radius = Math.sqrt(dx * dx + dz * dz)
 
-      this.setRadius(Math.max(0.1, radius))
+      this.setDimensions(radius, radius, this.height)
       this.notifyPropertyChanged('radiusPoint', this.radiusPoint)
+      return false
+    } else {
+      // Third click - set height
+      this.heightPoint = { ...point }
+      const height = Math.abs(point.y - this.centerPoint.y) || 2.0
+      this.setDimensions(this.radiusTop, this.radiusBottom, height)
+      this.notifyPropertyChanged('heightPoint', this.heightPoint)
       return true // Creation complete
     }
   }
@@ -169,9 +180,11 @@ export class SphereCommand extends GeometryCommand {
     }
 
     return {
-      type: 'sphere',
+      type: 'cylinder',
       position: this.position,
-      radius: this.radius,
+      radiusTop: this.radiusTop,
+      radiusBottom: this.radiusBottom,
+      height: this.height,
       material: {
         color: this.color,
         opacity: 0.5, // Semi-transparent for preview
@@ -185,12 +198,17 @@ export class SphereCommand extends GeometryCommand {
    * @returns {boolean} True if parameters are valid
    */
   validateParameters() {
-    if (this.radius <= 0) {
-      this.error = new Error('Sphere radius must be a positive value')
+    if (this.radiusTop <= 0 || this.radiusBottom <= 0) {
+      this.error = new Error('Cylinder radii must be positive values')
       return false
     }
 
-    if (this.widthSegments < 3 || this.heightSegments < 2) {
+    if (this.height <= 0) {
+      this.error = new Error('Cylinder height must be a positive value')
+      return false
+    }
+
+    if (this.radialSegments < 3 || this.heightSegments < 1) {
       this.error = new Error('Invalid subdivision parameters')
       return false
     }
@@ -219,18 +237,19 @@ export class SphereCommand extends GeometryCommand {
     }
 
     try {
-      // Create SphereVisualObject with proper parameters
-      const visualObject = new SphereVisualObject(null, {
-        radius: this.radius,
-        widthSegments: this.widthSegments,
+      // Create CylinderVisualObject with proper parameters
+      const visualObject = new CylinderVisualObject(null, {
+        radiusTop: this.radiusTop,
+        radiusBottom: this.radiusBottom,
+        height: this.height,
+        radialSegments: this.radialSegments,
         heightSegments: this.heightSegments,
-        phiStart: this.phiStart,
-        phiLength: this.phiLength,
+        openEnded: this.openEnded,
         thetaStart: this.thetaStart,
         thetaLength: this.thetaLength
       })
 
-      visualObject.name = `Sphere_${Date.now()}`
+      visualObject.name = `Cylinder_${Date.now()}`
 
       // Configure material properties
       visualObject.setMaterialConfig('default', {
@@ -248,17 +267,25 @@ export class SphereCommand extends GeometryCommand {
       visualObject.scale = { x: 1, y: 1, z: 1 }
 
       // Set properties for the property panel
-      visualObject.setProperty('type', 'Sphere')
-      visualObject.setProperty('radius', this.radius)
-      visualObject.setProperty('widthSegments', this.widthSegments)
+      visualObject.setProperty('type', 'Cylinder')
+      visualObject.setProperty('radiusTop', this.radiusTop)
+      visualObject.setProperty('radiusBottom', this.radiusBottom)
+      visualObject.setProperty('height', this.height)
+      visualObject.setProperty('radialSegments', this.radialSegments)
       visualObject.setProperty('heightSegments', this.heightSegments)
       visualObject.setProperty('color', this.color)
       visualObject.setProperty('opacity', this.opacity)
       visualObject.setProperty('wireframe', this.wireframe)
       visualObject.setProperty('metalness', this.metalness)
       visualObject.setProperty('roughness', this.roughness)
-      visualObject.setProperty('volume', (4/3) * Math.PI * Math.pow(this.radius, 3))
-      visualObject.setProperty('surfaceArea', 4 * Math.PI * Math.pow(this.radius, 2))
+
+      // Calculate volume (for truncated cone formula)
+      const volume = (Math.PI * this.height / 3) * (
+        this.radiusTop * this.radiusTop +
+        this.radiusTop * this.radiusBottom +
+        this.radiusBottom * this.radiusBottom
+      )
+      visualObject.setProperty('volume', volume)
 
       // Add to the active document with proper nodeData format
       const nodeData = {
@@ -277,19 +304,21 @@ export class SphereCommand extends GeometryCommand {
       this.addCreatedObject(visualObject)
 
       // Log creation details
-      console.log(`Created sphere: ${visualObject.name}`, {
-        radius: this.radius,
+      console.log(`Created cylinder: ${visualObject.name}`, {
+        radiusTop: this.radiusTop,
+        radiusBottom: this.radiusBottom,
+        height: this.height,
         position: this.position,
-        subdivision: { width: this.widthSegments, height: this.heightSegments }
+        subdivision: { radial: this.radialSegments, height: this.heightSegments }
       })
 
       return CommandResult.success(
         visualObject,
-        `Sphere created successfully: ${visualObject.name}`
+        `Cylinder created successfully: ${visualObject.name}`
       )
 
     } catch (error) {
-      console.error('SphereCommand execution failed:', error)
+      console.error('CylinderCommand execution failed:', error)
       throw error
     }
   }
@@ -298,10 +327,12 @@ export class SphereCommand extends GeometryCommand {
    * Called before command execution
    */
   async beforeExecute() {
-    console.log('Starting sphere creation...', {
-      radius: this.radius,
+    console.log('Starting cylinder creation...', {
+      radiusTop: this.radiusTop,
+      radiusBottom: this.radiusBottom,
+      height: this.height,
       position: this.position,
-      subdivision: { width: this.widthSegments, height: this.heightSegments },
+      subdivision: { radial: this.radialSegments, height: this.heightSegments },
       interactive: this.isInteractive
     })
   }
@@ -310,12 +341,13 @@ export class SphereCommand extends GeometryCommand {
    * Called after successful command execution
    */
   async afterExecute() {
-    console.log('Sphere creation completed successfully')
+    console.log('Cylinder creation completed successfully')
 
     // If this was an interactive creation, clean up
     if (this.isInteractive) {
       this.centerPoint = null
       this.radiusPoint = null
+      this.heightPoint = null
     }
   }
 
@@ -325,7 +357,7 @@ export class SphereCommand extends GeometryCommand {
    */
   async onError(error) {
     await super.onError(error)
-    console.error('Sphere creation failed:', error.message)
+    console.error('Cylinder creation failed:', error.message)
   }
 
   /**
@@ -333,12 +365,13 @@ export class SphereCommand extends GeometryCommand {
    */
   async onCancel() {
     await super.onCancel()
-    console.log('Sphere creation cancelled')
+    console.log('Cylinder creation cancelled')
 
     // Clean up interactive state
     if (this.isInteractive) {
       this.centerPoint = null
       this.radiusPoint = null
+      this.heightPoint = null
     }
   }
 
@@ -352,17 +385,20 @@ export class SphereCommand extends GeometryCommand {
     return {
       ...baseStatus,
       parameters: {
-        radius: this.radius,
+        radiusTop: this.radiusTop,
+        radiusBottom: this.radiusBottom,
+        height: this.height,
         position: this.position,
         rotation: this.rotation,
-        subdivision: { width: this.widthSegments, height: this.heightSegments },
-        sections: { phiStart: this.phiStart, phiLength: this.phiLength, thetaStart: this.thetaStart, thetaLength: this.thetaLength },
+        subdivision: { radial: this.radialSegments, height: this.heightSegments },
+        sections: { thetaStart: this.thetaStart, thetaLength: this.thetaLength, openEnded: this.openEnded },
         material: { color: this.color, opacity: this.opacity, wireframe: this.wireframe, metalness: this.metalness, roughness: this.roughness }
       },
       interactive: {
         isInteractive: this.isInteractive,
         centerPoint: this.centerPoint,
-        radiusPoint: this.radiusPoint
+        radiusPoint: this.radiusPoint,
+        heightPoint: this.heightPoint
       },
       createdObjects: this.createdObjects.length
     }
@@ -374,31 +410,31 @@ export class SphereCommand extends GeometryCommand {
    */
   async executeWithDimensionInput() {
     try {
-      console.log('Creating sphere with dimension input...')
+      console.log('Creating cylinder with dimension input...')
 
       // Initialize interactive input
       const InteractiveInput = (await import('../cad-core/command/InteractiveInput.js')).InteractiveInput
       const interactiveInput = new InteractiveInput(this.application)
 
-      // Get radius using custom dialog
-      const radius = await interactiveInput.getSingleDimension(
-        'Create Sphere - Enter Radius',
-        'Radius',
-        this.radius,
-        { min: 0.1, max: 50 }
+      // Get cylinder dimensions (radius and height)
+      const dimensions = await interactiveInput.getTwoDimensions(
+        'Create Cylinder - Enter Dimensions',
+        { x: this.radiusTop, y: this.height },
+        { x: 'Radius', y: 'Length' },
+        { min: 0.1, max: 100 }
       )
 
       if (this.isCancelled) {
-        return CommandResult.error('Sphere creation cancelled by user')
+        return CommandResult.error('Cylinder creation cancelled by user')
       }
 
-      // Set the radius
-      this.setRadius(radius)
+      // Set the dimensions (X=radius, Y=height)
+      this.setDimensions(dimensions.x, dimensions.x, dimensions.y)
 
       // Temporarily disable dimension input to avoid recursion
       this.useDimensionInput = false
 
-      // Create the sphere using the existing logic
+      // Create the cylinder using the existing logic
       const result = await this.executeAsync()
 
       // Restore dimension input flag
@@ -407,10 +443,11 @@ export class SphereCommand extends GeometryCommand {
       return result
 
     } catch (error) {
-      console.error('SphereCommand dimension input failed:', error)
+      console.error('CylinderCommand dimension input failed:', error)
       throw error
     }
   }
 }
 
-export default SphereCommand
+export default CylinderCommand
+

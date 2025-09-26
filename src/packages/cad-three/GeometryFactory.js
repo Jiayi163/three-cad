@@ -1,6 +1,6 @@
 /**
  * GeometryFactory - Factory class for creating and managing Three.js geometries
- * 
+ *
  * Provides optimized geometry creation with caching and reuse capabilities:
  * - Basic shapes (box, sphere, cylinder, plane, cone, torus)
  * - Geometry caching and sharing for performance
@@ -17,14 +17,14 @@ export class GeometryFactory {
         this._geometryCache = new Map();
         this._cacheEnabled = true;
         this._maxCacheSize = 100;
-        
+
         // Statistics for monitoring
         this._stats = {
             created: 0,
             cached: 0,
             disposed: 0
         };
-        
+
         // Default parameters for different shapes
         this._defaults = {
             box: {
@@ -75,10 +75,22 @@ export class GeometryFactory {
                 radialSegments: 16,
                 tubularSegments: 100,
                 arc: Math.PI * 2
+            },
+            line: {
+                points: [
+                    { x: 0, y: 0, z: 0 },
+                    { x: 1, y: 0, z: 0 }
+                ]
+            },
+            circle: {
+                radius: 1,
+                segments: 32,
+                thetaStart: 0,
+                thetaLength: Math.PI * 2
             }
         };
     }
-    
+
     /**
      * Generate cache key for geometry parameters
      * @param {string} type - Geometry type
@@ -92,7 +104,7 @@ export class GeometryFactory {
             .join('|');
         return `${type}:${sortedParams}`;
     }
-    
+
     /**
      * Get geometry from cache or create new one
      * @param {string} type - Geometry type
@@ -102,23 +114,23 @@ export class GeometryFactory {
      */
     _getOrCreateGeometry(type, params, createFn) {
         const cacheKey = this._generateCacheKey(type, params);
-        
+
         if (this._cacheEnabled && this._geometryCache.has(cacheKey)) {
             this._stats.cached++;
             return this._geometryCache.get(cacheKey).clone();
         }
-        
+
         const geometry = createFn();
         this._stats.created++;
-        
+
         // Add to cache if enabled and under size limit
         if (this._cacheEnabled && this._geometryCache.size < this._maxCacheSize) {
             this._geometryCache.set(cacheKey, geometry.clone());
         }
-        
+
         return geometry;
     }
-    
+
     /**
      * Normalize and validate parameters
      * @param {string} type - Geometry type
@@ -130,9 +142,9 @@ export class GeometryFactory {
         if (!defaults) {
             throw new Error(`Unknown geometry type: ${type}`);
         }
-        
+
         const normalized = { ...defaults, ...params };
-        
+
         // Validate numeric parameters
         Object.keys(normalized).forEach(key => {
             const value = normalized[key];
@@ -145,15 +157,15 @@ export class GeometryFactory {
                 }
             }
         });
-        
+
         return normalized;
     }
-    
+
     /**
      * Create box geometry
      * @param {object} params - Box parameters
      * @param {number} params.width - Width of the box
-     * @param {number} params.height - Height of the box  
+     * @param {number} params.height - Height of the box
      * @param {number} params.depth - Depth of the box
      * @param {number} params.widthSegments - Width segments
      * @param {number} params.heightSegments - Height segments
@@ -162,7 +174,7 @@ export class GeometryFactory {
      */
     createBox(params = {}) {
         const p = this._normalizeParams('box', params);
-        
+
         return this._getOrCreateGeometry('box', p, () => {
             return new THREE.BoxGeometry(
                 p.width,
@@ -174,7 +186,7 @@ export class GeometryFactory {
             );
         });
     }
-    
+
     /**
      * Create sphere geometry
      * @param {object} params - Sphere parameters
@@ -189,7 +201,7 @@ export class GeometryFactory {
      */
     createSphere(params = {}) {
         const p = this._normalizeParams('sphere', params);
-        
+
         return this._getOrCreateGeometry('sphere', p, () => {
             return new THREE.SphereGeometry(
                 p.radius,
@@ -202,7 +214,7 @@ export class GeometryFactory {
             );
         });
     }
-    
+
     /**
      * Create cylinder geometry
      * @param {object} params - Cylinder parameters
@@ -218,7 +230,7 @@ export class GeometryFactory {
      */
     createCylinder(params = {}) {
         const p = this._normalizeParams('cylinder', params);
-        
+
         return this._getOrCreateGeometry('cylinder', p, () => {
             return new THREE.CylinderGeometry(
                 p.radiusTop,
@@ -232,7 +244,7 @@ export class GeometryFactory {
             );
         });
     }
-    
+
     /**
      * Create plane geometry
      * @param {object} params - Plane parameters
@@ -244,7 +256,7 @@ export class GeometryFactory {
      */
     createPlane(params = {}) {
         const p = this._normalizeParams('plane', params);
-        
+
         return this._getOrCreateGeometry('plane', p, () => {
             return new THREE.PlaneGeometry(
                 p.width,
@@ -254,7 +266,7 @@ export class GeometryFactory {
             );
         });
     }
-    
+
     /**
      * Create cone geometry
      * @param {object} params - Cone parameters
@@ -269,7 +281,7 @@ export class GeometryFactory {
      */
     createCone(params = {}) {
         const p = this._normalizeParams('cone', params);
-        
+
         return this._getOrCreateGeometry('cone', p, () => {
             return new THREE.ConeGeometry(
                 p.radius,
@@ -282,7 +294,7 @@ export class GeometryFactory {
             );
         });
     }
-    
+
     /**
      * Create torus geometry
      * @param {object} params - Torus parameters
@@ -295,7 +307,7 @@ export class GeometryFactory {
      */
     createTorus(params = {}) {
         const p = this._normalizeParams('torus', params);
-        
+
         return this._getOrCreateGeometry('torus', p, () => {
             return new THREE.TorusGeometry(
                 p.radius,
@@ -306,7 +318,56 @@ export class GeometryFactory {
             );
         });
     }
-    
+
+    /**
+     * Create line geometry from points
+     * @param {object} params - Line parameters
+     * @param {Array} params.points - Array of 3D points [{x, y, z}, ...]
+     * @returns {THREE.BufferGeometry}
+     */
+    createLine(params = {}) {
+        const p = this._normalizeParams('line', params);
+
+        return this._getOrCreateGeometry('line', p, () => {
+            // Create BufferGeometry for line
+            const geometry = new THREE.BufferGeometry();
+            const vertices = [];
+
+            // Convert points to vertices array
+            for (const point of p.points) {
+                vertices.push(point.x, point.y, point.z);
+            }
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            return geometry;
+        });
+    }
+
+    /**
+     * Create circle geometry
+     * @param {object} params - Circle parameters
+     * @param {number} params.radius - Circle radius
+     * @param {number} params.segments - Number of segments
+     * @param {number} params.thetaStart - Start angle
+     * @param {number} params.thetaLength - Arc length
+     * @returns {THREE.RingGeometry}
+     */
+    createCircle(params = {}) {
+        const p = this._normalizeParams('circle', params);
+
+        return this._getOrCreateGeometry('circle', p, () => {
+            // Use RingGeometry with inner radius 0 to create a filled circle
+            return new THREE.RingGeometry(
+                0, // inner radius
+                p.radius, // outer radius
+                p.segments, // theta segments
+                1, // phi segments
+                p.thetaStart,
+                p.thetaLength
+            );
+        });
+    }
+
     /**
      * Create geometry by type
      * @param {string} type - Geometry type
@@ -328,11 +389,15 @@ export class GeometryFactory {
                 return this.createCone(params);
             case 'torus':
                 return this.createTorus(params);
+            case 'line':
+                return this.createLine(params);
+            case 'circle':
+                return this.createCircle(params);
             default:
                 throw new Error(`Unsupported geometry type: ${type}`);
         }
     }
-    
+
     /**
      * Create custom geometry from vertices and faces
      * @param {array} vertices - Array of vertices [x, y, z, ...]
@@ -343,38 +408,38 @@ export class GeometryFactory {
      */
     createCustomGeometry(vertices, indices = null, normals = null, uvs = null) {
         const geometry = new THREE.BufferGeometry();
-        
+
         // Set vertices
         if (!vertices || vertices.length === 0) {
             throw new Error('Vertices array is required and cannot be empty');
         }
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        
+
         // Set indices if provided
         if (indices && indices.length > 0) {
             geometry.setIndex(indices);
         }
-        
+
         // Set normals if provided, otherwise compute them
         if (normals && normals.length > 0) {
             geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
         } else {
             geometry.computeVertexNormals();
         }
-        
+
         // Set UV coordinates if provided
         if (uvs && uvs.length > 0) {
             geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
         }
-        
+
         // Compute bounding box and sphere
         geometry.computeBoundingBox();
         geometry.computeBoundingSphere();
-        
+
         this._stats.created++;
         return geometry;
     }
-    
+
     /**
      * Create line geometry from points
      * @param {array} points - Array of THREE.Vector3 points
@@ -384,10 +449,10 @@ export class GeometryFactory {
         if (!points || points.length < 2) {
             throw new Error('At least 2 points are required for line geometry');
         }
-        
+
         const geometry = new THREE.BufferGeometry();
         const positions = [];
-        
+
         points.forEach(point => {
             if (point instanceof THREE.Vector3) {
                 positions.push(point.x, point.y, point.z);
@@ -397,13 +462,13 @@ export class GeometryFactory {
                 throw new Error('Invalid point format. Expected Vector3 or {x, y, z} object');
             }
         });
-        
+
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-        
+
         this._stats.created++;
         return geometry;
     }
-    
+
     /**
      * Create wireframe geometry from any geometry
      * @param {THREE.BufferGeometry} sourceGeometry - Source geometry
@@ -413,12 +478,12 @@ export class GeometryFactory {
         if (!sourceGeometry || !(sourceGeometry instanceof THREE.BufferGeometry)) {
             throw new Error('Valid BufferGeometry is required');
         }
-        
+
         const wireframe = new THREE.WireframeGeometry(sourceGeometry);
         this._stats.created++;
         return wireframe;
     }
-    
+
     /**
      * Create edges geometry from any geometry
      * @param {THREE.BufferGeometry} sourceGeometry - Source geometry
@@ -429,12 +494,12 @@ export class GeometryFactory {
         if (!sourceGeometry || !(sourceGeometry instanceof THREE.BufferGeometry)) {
             throw new Error('Valid BufferGeometry is required');
         }
-        
+
         const edges = new THREE.EdgesGeometry(sourceGeometry, thresholdAngle);
         this._stats.created++;
         return edges;
     }
-    
+
     /**
      * Merge multiple geometries into one
      * @param {array} geometries - Array of geometries to merge
@@ -444,23 +509,23 @@ export class GeometryFactory {
         if (!geometries || geometries.length === 0) {
             throw new Error('At least one geometry is required for merging');
         }
-        
+
         // Validate all geometries
         geometries.forEach((geo, index) => {
             if (!geo || !(geo instanceof THREE.BufferGeometry)) {
                 throw new Error(`Invalid geometry at index ${index}`);
             }
         });
-        
+
         const merged = THREE.BufferGeometryUtils.mergeBufferGeometries(geometries);
         if (!merged) {
             throw new Error('Failed to merge geometries');
         }
-        
+
         this._stats.created++;
         return merged;
     }
-    
+
     /**
      * Get default parameters for a geometry type
      * @param {string} type - Geometry type
@@ -473,7 +538,7 @@ export class GeometryFactory {
         }
         return { ...defaults };
     }
-    
+
     /**
      * Set default parameters for a geometry type
      * @param {string} type - Geometry type
@@ -485,7 +550,7 @@ export class GeometryFactory {
         }
         this._defaults[type] = { ...this._defaults[type], ...params };
     }
-    
+
     /**
      * Get supported geometry types
      * @returns {array}
@@ -493,7 +558,7 @@ export class GeometryFactory {
     getSupportedTypes() {
         return Object.keys(this._defaults);
     }
-    
+
     /**
      * Enable or disable geometry caching
      * @param {boolean} enabled - Whether to enable caching
@@ -504,14 +569,14 @@ export class GeometryFactory {
             this.clearCache();
         }
     }
-    
+
     /**
      * Set maximum cache size
      * @param {number} size - Maximum number of cached geometries
      */
     setMaxCacheSize(size) {
         this._maxCacheSize = Math.max(0, size);
-        
+
         // Trim cache if over new limit
         if (this._geometryCache.size > this._maxCacheSize) {
             const entries = Array.from(this._geometryCache.entries());
@@ -521,7 +586,7 @@ export class GeometryFactory {
             });
         }
     }
-    
+
     /**
      * Clear geometry cache
      */
@@ -531,7 +596,7 @@ export class GeometryFactory {
         });
         this._geometryCache.clear();
     }
-    
+
     /**
      * Get factory statistics
      * @returns {object}
@@ -544,7 +609,7 @@ export class GeometryFactory {
             maxCacheSize: this._maxCacheSize
         };
     }
-    
+
     /**
      * Reset statistics
      */
@@ -555,7 +620,7 @@ export class GeometryFactory {
             disposed: 0
         };
     }
-    
+
     /**
      * Dispose of all cached geometries and reset factory
      */

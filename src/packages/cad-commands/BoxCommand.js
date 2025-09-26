@@ -9,6 +9,7 @@
 
 import { GeometryCommand, CommandResult } from '../cad-core/command/Command.js'
 import { BoxVisualObject } from '../cad-three/BasicShapes.js'
+import { markRaw } from 'vue'
 
 /**
  * Interactive command to create a box geometry in the 3D scene
@@ -26,6 +27,9 @@ export class BoxCommand extends GeometryCommand {
     this.firstCorner = null
     this.oppositeCorner = null
     this.height = 2.0
+
+    // Dimension input mode
+    this.useDimensionInput = false
 
     // Preview state
     this.previewObject = null
@@ -198,6 +202,12 @@ export class BoxCommand extends GeometryCommand {
    */
   async executeAsync() {
     try {
+      // Check if we should use dimension input mode
+      if (this.useDimensionInput) {
+        return await this.executeWithDimensionInput()
+      }
+
+      // Original interactive creation mode
       // Step 1: Get first corner point
       console.log('Step 1: Waiting for first corner selection...')
       this.firstCorner = await this.getPoint(this.stepMessages[0])
@@ -256,6 +266,47 @@ export class BoxCommand extends GeometryCommand {
       // Clean up on error
       await this.cleanupPreview()
       console.error('BoxCommand execution failed:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Execute command with dimension input dialogs
+   * @returns {Promise<CommandResult>}
+   */
+  async executeWithDimensionInput() {
+    try {
+      console.log('Creating box with dimension input...')
+
+      // Initialize interactive input
+      const InteractiveInput = (await import('../cad-core/command/InteractiveInput.js')).InteractiveInput
+      const interactiveInput = new InteractiveInput(this.application)
+
+      // Get all dimensions at once
+      const dimensions = await interactiveInput.getMultipleDimensions(
+        'Create Box - Enter Dimensions',
+        { x: this.width, y: '', z: this.depth },
+        { x: 'Length', y: 'Height', z: 'Width' },
+        { min: 0.1, max: 100 }
+      )
+
+      if (this.isCancelled) {
+        return CommandResult.error('Box creation cancelled by user')
+      }
+
+      // Set the dimensions (note: X=width, Y=height, Z=depth)
+      this.setDimensions(dimensions.x, dimensions.y, dimensions.z)
+
+      // Create the final box directly (bypassing corner-based creation)
+      const finalBox = await this.createFinalBoxDirect()
+
+      return CommandResult.success(
+        finalBox,
+        `Box created successfully: ${finalBox.name} (${dimensions.x} × ${dimensions.y} × ${dimensions.z})`
+      )
+
+    } catch (error) {
+      console.error('BoxCommand dimension input failed:', error)
       throw error
     }
   }
@@ -536,7 +587,7 @@ export class BoxCommand extends GeometryCommand {
       visible: true,
       locked: false,
       geometry: visualObject.geometry,
-      visualObject: visualObject  // The actual BoxVisualObject instance
+        visualObject: markRaw(visualObject)  // Prevent Vue reactivity on VisualObject
     }
 
     await this.application.activeDocument.addNode(nodeData)
@@ -592,6 +643,72 @@ export class BoxCommand extends GeometryCommand {
       },
       createdObjects: this.createdObjects.length
     }
+  }
+
+  /**
+   * Create final box directly using current dimensions (for dimension input mode)
+   * @returns {Promise<BoxVisualObject>} The created box visual object
+   */
+  async createFinalBoxDirect() {
+    // Create BoxVisualObject with current dimensions
+    const visualObject = new BoxVisualObject(null, {
+      width: this.width,
+      height: this.height,
+      depth: this.depth
+    })
+
+    visualObject.name = `Box_${Date.now()}`
+
+    // Configure material properties
+    visualObject.setMaterialConfig('default', {
+      color: this.color,
+      opacity: this.opacity,
+      transparent: this.opacity < 1.0,
+      wireframe: this.wireframe
+    })
+
+    // Set transform properties at origin
+    visualObject.position = { ...this.position }
+    visualObject.rotation = { x: 0, y: 0, z: 0 }
+    visualObject.scale = { x: 1, y: 1, z: 1 }
+
+    // Set properties for the property panel
+    visualObject.setProperty('type', 'Box')
+    visualObject.setProperty('width', this.width)
+    visualObject.setProperty('height', this.height)
+    visualObject.setProperty('depth', this.depth)
+    visualObject.setProperty('color', this.color)
+    visualObject.setProperty('opacity', this.opacity)
+    visualObject.setProperty('wireframe', this.wireframe)
+    visualObject.setProperty('volume', this.width * this.height * this.depth)
+
+    // Add to the active document with proper nodeData format
+    if (this.application && this.application.activeDocument) {
+      const nodeData = {
+        id: `box_${Date.now()}`,
+        name: visualObject.name,
+        type: 'Box',
+        visualObject: markRaw(visualObject),
+        properties: {
+          width: this.width,
+          height: this.height,
+          depth: this.depth,
+          position: this.position,
+          rotation: { x: 0, y: 0, z: 0 },
+          color: this.color,
+          opacity: this.opacity,
+          wireframe: this.wireframe
+        },
+        children: []
+      }
+
+      this.application.activeDocument.addNode(nodeData)
+    }
+
+    // Track created objects
+    this.createdObjects.push(visualObject)
+
+    return visualObject
   }
 }
 

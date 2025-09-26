@@ -64,27 +64,6 @@
         </div>
       </div>
 
-      <!-- View Tools Group -->
-      <div class="tool-group">
-        <div class="tool-group-header" @click="toggleGroup('view')">
-          <i class="icon-folder"></i>
-          <span>View</span>
-          <i :class="expandedGroups.view ? 'icon-expand' : 'icon-collapse'"></i>
-        </div>
-        <div v-show="expandedGroups.view" class="tool-group-content">
-          <div
-            v-for="tool in viewTools"
-            :key="tool.id"
-            class="tool-item"
-            :class="{ active: activeTool === tool.id }"
-            @click="selectTool(tool.id)"
-            :title="tool.name"
-          >
-            <i :class="tool.icon"></i>
-            <span>{{ tool.name }}</span>
-          </div>
-        </div>
-      </div>
 
       <!-- Selection Tools Group -->
       <div class="tool-group">
@@ -129,7 +108,6 @@ export default {
     const expandedGroups = reactive({
       create: true,
       modify: true,
-      view: true,
       selection: true
     })
 
@@ -138,32 +116,15 @@ export default {
       { id: 'box', name: 'Box', icon: 'icon-box', command: 'CreateBox' },
       { id: 'sphere', name: 'Sphere', icon: 'icon-sphere', command: 'CreateSphere' },
       { id: 'cylinder', name: 'Cylinder', icon: 'icon-cylinder', command: 'CreateCylinder' },
-      { id: 'plane', name: 'Plane', icon: 'icon-plane', command: 'CreatePlane' },
-      { id: 'cone', name: 'Cone', icon: 'icon-cone', command: 'CreateCone' },
-      { id: 'torus', name: 'Torus', icon: 'icon-torus', command: 'CreateTorus' },
-      { id: 'line', name: 'Line', icon: 'icon-line', command: 'CreateLine' },
-      { id: 'circle', name: 'Circle', icon: 'icon-circle', command: 'CreateCircle' }
+      { id: 'plane', name: 'Plane', icon: 'icon-plane', command: 'CreatePlane' }
     ]
 
     const modifyTools = [
       { id: 'move', name: 'Move', icon: 'icon-move', command: 'moveObjects' },
       { id: 'rotate', name: 'Rotate', icon: 'icon-rotate', command: 'rotateObjects' },
       { id: 'scale', name: 'Scale', icon: 'icon-scale', command: 'scaleObjects' },
-      { id: 'copy', name: 'Copy', icon: 'icon-copy', command: 'copyObjects' },
-      { id: 'mirror', name: 'Mirror', icon: 'icon-mirror', command: 'mirrorObjects' },
-      { id: 'array', name: 'Array', icon: 'icon-array', command: 'arrayObjects' }
     ]
 
-    const viewTools = [
-      { id: 'zoom-all', name: 'Zoom All', icon: 'icon-zoom-all', command: 'zoomAll' },
-      { id: 'zoom-window', name: 'Zoom Window', icon: 'icon-zoom-window', command: 'zoomWindow' },
-      { id: 'pan', name: 'Pan', icon: 'icon-pan', command: 'panView' },
-      { id: 'orbit', name: 'Orbit', icon: 'icon-orbit', command: 'orbitView' },
-      { id: 'front-view', name: 'Front View', icon: 'icon-front', command: 'setViewFront' },
-      { id: 'top-view', name: 'Top View', icon: 'icon-top', command: 'setViewTop' },
-      { id: 'side-view', name: 'Side View', icon: 'icon-side', command: 'setViewSide' },
-      { id: 'isometric-view', name: 'Isometric', icon: 'icon-isometric', command: 'setViewIsometric' }
-    ]
 
     const selectionTools = [
       { id: 'select', name: 'Select', icon: 'icon-select', command: 'selectMode' },
@@ -185,7 +146,7 @@ export default {
       activeTool.value = toolId
 
       // Find the tool definition
-      const allTools = [...createTools, ...modifyTools, ...viewTools, ...selectionTools]
+      const allTools = [...createTools, ...modifyTools, ...selectionTools]
       const tool = allTools.find(t => t.id === toolId)
 
       if (tool && tool.command) {
@@ -197,11 +158,11 @@ export default {
             // Update status message
             commandStatusMessage.value = `Creating ${tool.name}...`
 
-            // For creation tools, use the new command system
+            // For creation tools, use the new command system with dimension input
             if (tool.command.startsWith('Create')) {
               const commandId = `create-${tool.id}` // e.g., 'create-box', 'create-sphere'
               const result = await appStore.executeCommand(commandId, {
-                interactive: true // Enable interactive creation mode
+                useDimensionInput: true // Enable dimension input dialogs
               })
 
               if (result && result.success) {
@@ -232,7 +193,7 @@ export default {
 
     // Computed properties
     const toolCount = computed(() => {
-      return createTools.length + modifyTools.length + viewTools.length + selectionTools.length
+      return createTools.length + modifyTools.length + selectionTools.length
     })
 
     return {
@@ -242,7 +203,6 @@ export default {
       expandedGroups,
       createTools,
       modifyTools,
-      viewTools,
       selectionTools,
       toolCount,
       commandStatusMessage,
@@ -415,22 +375,9 @@ export default {
 .icon-sphere::before { content: '⚪'; }
 .icon-cylinder::before { content: '🥫'; }
 .icon-plane::before { content: '⬜'; }
-.icon-line::before { content: '📏'; }
-.icon-circle::before { content: '⭕'; }
 .icon-move::before { content: '↔'; }
 .icon-rotate::before { content: '🔄'; }
 .icon-scale::before { content: '↔'; }
-.icon-copy::before { content: '📋'; }
-.icon-mirror::before { content: '🪞'; }
-.icon-array::before { content: '📊'; }
-.icon-zoom-all::before { content: '🔍'; }
-.icon-zoom-window::before { content: '🔍'; }
-.icon-pan::before { content: '✋'; }
-.icon-orbit::before { content: '🌐'; }
-.icon-front::before { content: '⬆'; }
-.icon-top::before { content: '⬆'; }
-.icon-side::before { content: '➡'; }
-.icon-isometric::before { content: '📐'; }
 .icon-select::before { content: '👆'; }
 .icon-select-all::before { content: '☑'; }
 .icon-deselect::before { content: '☐'; }

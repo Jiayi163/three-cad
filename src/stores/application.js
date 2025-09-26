@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, markRaw } from 'vue'
 import { CADApplication } from '../packages/cad-core/application/CADApplication.js'
+import * as THREE from 'three'
 
 export const useApplicationStore = defineStore('application', () => {
   // ==================== Core Application Instance ====================
@@ -434,75 +435,55 @@ export const useApplicationStore = defineStore('application', () => {
 
       switch (commandName) {
         case 'CreateBox':
-          result = await handleCreateBoxCommand(document, args)
+          // Use the new interactive BoxCommand instead of legacy handler
+          result = await executeCommand('create-box', {
+            useDimensionInput: true
+          })
           break
         case 'CreateSphere':
-          result = await handleCreateSphereCommand(document, args)
+          // Use the new interactive SphereCommand instead of legacy handler
+          result = await executeCommand('create-sphere', {
+            useDimensionInput: true
+          })
           break
         case 'CreateCylinder':
-          result = await handleCreateCylinderCommand(document, args)
-          break
-        case 'CreateCone':
-          result = await handleCreateConeCommand(document, args)
+          // Use the new interactive CylinderCommand instead of legacy handler
+          result = await executeCommand('create-cylinder', {
+            useDimensionInput: true
+          })
           break
         case 'CreatePlane':
-          result = await handleCreatePlaneCommand(document, args)
-          break
-        case 'CreateTorus':
-          result = await handleCreateTorusCommand(document, args)
-          break
-        case 'CreateLine':
-          result = await handleCreateLineCommand(document, args)
-          break
-        case 'CreateCircle':
-          result = await handleCreateCircleCommand(document, args)
+          // Use the new interactive PlaneCommand instead of legacy handler
+          result = await executeCommand('create-plane', {
+            useDimensionInput: true
+          })
           break
 
         // Modify commands
         case 'moveObjects':
-          result = await handleMoveObjectsCommand(document, args)
+          // Use the new professional MoveCommand with interactive input
+          result = await executeCommand('move-objects', {
+            isInteractive: true,
+            useCurrentPosition: true
+          })
           break
         case 'rotateObjects':
-          result = await handleRotateObjectsCommand(document, args)
+          // Use the new professional RotateCommand (interactive with dialog)
+          result = await executeCommand('rotate-objects', {
+            isInteractive: true,
+            rotationAxis: 'x', // Changed to X-axis for more visible rotation
+            useObjectCenter: true
+          })
           break
         case 'scaleObjects':
-          result = await handleScaleObjectsCommand(document, args)
-          break
-        case 'copyObjects':
-          result = await handleCopyObjectsCommand(document, args)
-          break
-        case 'mirrorObjects':
-          result = await handleMirrorObjectsCommand(document, args)
-          break
-        case 'arrayObjects':
-          result = await handleArrayObjectsCommand(document, args)
+          // Use the new professional ScaleCommand with non-uniform scaling
+          result = await executeCommand('scale-objects', {
+            isInteractive: true,
+            uniformScale: false, // Always use non-uniform scaling for XYZ stretching
+            useObjectCenter: true
+          })
           break
 
-        // View commands
-        case 'zoomAll':
-          result = await handleZoomAllCommand(document, args)
-          break
-        case 'zoomWindow':
-          result = await handleZoomWindowCommand(document, args)
-          break
-        case 'panView':
-          result = await handlePanViewCommand(document, args)
-          break
-        case 'orbitView':
-          result = await handleOrbitViewCommand(document, args)
-          break
-        case 'setViewFront':
-          result = await handleSetViewFrontCommand(document, args)
-          break
-        case 'setViewTop':
-          result = await handleSetViewTopCommand(document, args)
-          break
-        case 'setViewSide':
-          result = await handleSetViewSideCommand(document, args)
-          break
-        case 'setViewIsometric':
-          result = await handleSetViewIsometricCommand(document, args)
-          break
 
         // Selection commands
         case 'selectMode':
@@ -607,26 +588,6 @@ export const useApplicationStore = defineStore('application', () => {
     return node
   }
 
-  async function handleCreateConeCommand(document) {
-    const nodeData = {
-      id: `cone-${Date.now()}`,
-      name: `Cone ${document.nodes.length + 1}`,
-      type: 'cone',
-      visible: true,
-      properties: {
-        radius: 5,
-        height: 10,
-        position: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 },
-        material: 'default'
-      }
-    }
-
-    const node = document.addNode(nodeData)
-    document.selectNode(node, false)
-    console.log('Created cone node:', node)
-    return node
-  }
 
   async function handleCreatePlaneCommand(document) {
     const nodeData = {
@@ -649,67 +610,8 @@ export const useApplicationStore = defineStore('application', () => {
     return node
   }
 
-  async function handleCreateTorusCommand(document) {
-    const nodeData = {
-      id: `torus-${Date.now()}`,
-      name: `Torus ${document.nodes.length + 1}`,
-      type: 'torus',
-      visible: true,
-      properties: {
-        radius: 5,
-        tube: 2,
-        position: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 },
-        material: 'default'
-      }
-    }
 
-    const node = document.addNode(nodeData)
-    document.selectNode(node, false)
-    console.log('Created torus node:', node)
-    return node
-  }
 
-  async function handleCreateLineCommand(document) {
-    const nodeData = {
-      id: `line-${Date.now()}`,
-      name: `Line ${document.nodes.length + 1}`,
-      type: 'line',
-      visible: true,
-      properties: {
-        startPoint: { x: -5, y: 0, z: 0 },
-        endPoint: { x: 5, y: 0, z: 0 },
-        position: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 },
-        material: 'default'
-      }
-    }
-
-    const node = document.addNode(nodeData)
-    document.selectNode(node, false)
-    console.log('Created line node:', node)
-    return node
-  }
-
-  async function handleCreateCircleCommand(document) {
-    const nodeData = {
-      id: `circle-${Date.now()}`,
-      name: `Circle ${document.nodes.length + 1}`,
-      type: 'circle',
-      visible: true,
-      properties: {
-        radius: 5,
-        position: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 },
-        material: 'default'
-      }
-    }
-
-    const node = document.addNode(nodeData)
-    document.selectNode(node, false)
-    console.log('Created circle node:', node)
-    return node
-  }
 
   // ==================== Modify Commands ====================
 
@@ -721,10 +623,25 @@ export const useApplicationStore = defineStore('application', () => {
     }
 
     console.log('Move tool activated for', selectedNodes.length, 'objects')
-    // In a full implementation, this would start an interactive move mode
-    // For now, just log the action
+
+    // Simple move implementation - move objects by a small offset
+    selectedNodes.forEach((node, index) => {
+      if (node.visualObject && node.visualObject.position) {
+        const currentPos = node.visualObject.position
+        const offset = { x: 2, y: 0, z: 0 } // Move 2 units to the right
+
+        node.visualObject.position = {
+          x: currentPos.x + offset.x,
+          y: currentPos.y + offset.y,
+          z: currentPos.z + offset.z
+        }
+
+        console.log(`Moved ${node.name} to:`, node.visualObject.position)
+      }
+    })
+
     emitToolChange('moveObjects')
-    return { action: 'move', objects: selectedNodes.length }
+    return { action: 'move', objects: selectedNodes.length, moved: true }
   }
 
   async function handleRotateObjectsCommand(document) {
@@ -735,8 +652,30 @@ export const useApplicationStore = defineStore('application', () => {
     }
 
     console.log('Rotate tool activated for', selectedNodes.length, 'objects')
+
+    // Enhanced rotate implementation - rotate objects by 90 degrees around Y axis for more visible effect
+    selectedNodes.forEach((node, index) => {
+      if (node.visualObject) {
+        // Set rotation property if it doesn't exist
+        if (!node.visualObject.rotation) {
+          node.visualObject.rotation = { x: 0, y: 0, z: 0 }
+        }
+
+        const currentRotation = node.visualObject.rotation
+        const rotationAmount = Math.PI / 2 // 90 degrees in radians for more visible rotation
+
+        node.visualObject.rotation = {
+          x: currentRotation.x,
+          y: currentRotation.y + rotationAmount,
+          z: currentRotation.z
+        }
+
+        console.log(`Rotated ${node.name} by 90° around Y-axis to:`, node.visualObject.rotation)
+      }
+    })
+
     emitToolChange('rotateObjects')
-    return { action: 'rotate', objects: selectedNodes.length }
+    return { action: 'rotate', objects: selectedNodes.length, rotated: true }
   }
 
   async function handleScaleObjectsCommand(document) {
@@ -747,150 +686,35 @@ export const useApplicationStore = defineStore('application', () => {
     }
 
     console.log('Scale tool activated for', selectedNodes.length, 'objects')
-    emitToolChange('scaleObjects')
-    return { action: 'scale', objects: selectedNodes.length }
-  }
 
-  async function handleCopyObjectsCommand(document) {
-    const selectedNodes = document.selectedNodes.items
-    if (selectedNodes.length === 0) {
-      console.warn('No objects selected for copy operation')
-      return null
-    }
-
-    console.log('Copying', selectedNodes.length, 'objects')
-
-    // Create copies of selected objects
-    const copies = []
+    // Simple scale implementation - scale objects by 1.5x
     selectedNodes.forEach((node, index) => {
-      console.log('Processing node for copy:', { id: node.id, type: node.type, name: node.name })
-
-      // Skip demo objects or objects without proper structure
-      if (!node.type || !node.id || node.id.startsWith('demo-')) {
-        console.warn('Skipping demo object or invalid node:', { id: node.id, type: node.type, name: node.name })
-        return
-      }
-
-      // Get current properties safely
-      const currentProps = node.properties || {}
-      const currentPosition = currentProps.position || { x: 0, y: 0, z: 0 }
-
-      const copyData = {
-        id: `${node.type}-copy-${Date.now()}-${index}`,
-        name: `${node.name} Copy`,
-        type: node.type,
-        visible: node.visible !== false,
-        properties: {
-          ...currentProps,
-          position: {
-            x: currentPosition.x + 2,
-            y: currentPosition.y,
-            z: currentPosition.z + 2
-          }
+      if (node.visualObject) {
+        // Set scale property if it doesn't exist
+        if (!node.visualObject.scale) {
+          node.visualObject.scale = { x: 1, y: 1, z: 1 }
         }
-      }
 
-      console.log('Creating copy with data:', copyData)
-      const copyNode = document.addNode(copyData)
-      copies.push(copyNode)
+        const currentScale = node.visualObject.scale
+        const scaleFactor = 1.5
+
+        node.visualObject.scale = {
+          x: currentScale.x * scaleFactor,
+          y: currentScale.y * scaleFactor,
+          z: currentScale.z * scaleFactor
+        }
+
+        console.log(`Scaled ${node.name} to:`, node.visualObject.scale)
+      }
     })
 
-    if (copies.length > 0) {
-      // Select the copies
-      document.clearSelection()
-      copies.forEach(copy => document.selectNode(copy, true))
-    }
-
-    console.log('Created', copies.length, 'copies')
-    return { action: 'copy', copies: copies.length }
+    emitToolChange('scaleObjects')
+    return { action: 'scale', objects: selectedNodes.length, scaled: true }
   }
 
-  async function handleMirrorObjectsCommand(document) {
-    const selectedNodes = document.selectedNodes.items
-    if (selectedNodes.length === 0) {
-      console.warn('No objects selected for mirror operation')
-      return null
-    }
 
-    console.log('Mirror tool activated for', selectedNodes.length, 'objects')
-    emitToolChange('mirrorObjects')
-    return { action: 'mirror', objects: selectedNodes.length }
-  }
 
-  async function handleArrayObjectsCommand(document) {
-    const selectedNodes = document.selectedNodes.items
-    if (selectedNodes.length === 0) {
-      console.warn('No objects selected for array operation')
-      return null
-    }
 
-    console.log('Array tool activated for', selectedNodes.length, 'objects')
-    emitToolChange('arrayObjects')
-    return { action: 'array', objects: selectedNodes.length }
-  }
-
-  // ==================== View Commands ====================
-
-  async function handleZoomAllCommand() {
-    console.log('Zoom All command executed')
-    // Trigger fit to view on the active view
-    fitToView()
-    return { action: 'zoomAll' }
-  }
-
-  async function handleZoomWindowCommand() {
-    console.log('Zoom Window tool activated')
-    emitToolChange('zoomWindow')
-    return { action: 'zoomWindow' }
-  }
-
-  async function handlePanViewCommand() {
-    console.log('Pan View tool activated')
-    emitToolChange('panView')
-    return { action: 'panView' }
-  }
-
-  async function handleOrbitViewCommand() {
-    console.log('Orbit View tool activated')
-    emitToolChange('orbitView')
-    return { action: 'orbitView' }
-  }
-
-  async function handleSetViewFrontCommand() {
-    console.log('Setting camera to Front view')
-    const view = activeView.value
-    if (view && view.setCameraView) {
-      view.setCameraView('front')
-    }
-    return { action: 'setViewFront' }
-  }
-
-  async function handleSetViewTopCommand() {
-    console.log('Setting camera to Top view')
-    const view = activeView.value
-    if (view && view.setCameraView) {
-      view.setCameraView('top')
-    }
-    return { action: 'setViewTop' }
-  }
-
-  async function handleSetViewSideCommand() {
-    console.log('Setting camera to Side view')
-    const view = activeView.value
-    if (view && view.setCameraView) {
-      view.setCameraView('left')
-    }
-    return { action: 'setViewSide' }
-  }
-
-  async function handleSetViewIsometricCommand() {
-    console.log('Setting camera to Isometric view')
-    const view = activeView.value
-    if (view && view.setCameraView) {
-      view.setCameraView('isometric')
-    }
-    return { action: 'setViewIsometric' }
-  }
 
   // ==================== Selection Commands ====================
 
@@ -1257,6 +1081,7 @@ export const useApplicationStore = defineStore('application', () => {
 
     // Command execution
     executeCommand,
+    executeCommandLegacy,
 
     // Document management
     createNewDocument,

@@ -1,9 +1,9 @@
 /**
  * BasicShapes - Concrete implementations of VisualObject for basic geometric shapes
- * 
+ *
  * Provides ready-to-use visual objects for common CAD shapes:
  * - BoxVisualObject
- * - SphereVisualObject  
+ * - SphereVisualObject
  * - CylinderVisualObject
  * - PlaneVisualObject
  * - ConeVisualObject
@@ -22,7 +22,7 @@ export class BoxVisualObject extends VisualObject {
         super(nodeId);
         this._type = 'BoxVisualObject';
         this._name = `Box_${this._id}`;
-        
+
         // Box-specific parameters
         this._boxParams = {
             width: 1,
@@ -33,12 +33,12 @@ export class BoxVisualObject extends VisualObject {
             depthSegments: 1,
             ...params
         };
-        
+
         this.setProperty('type', this._type);
         this.setProperty('name', this._name);
         this.setProperty('boxParams', this._boxParams);
     }
-    
+
     /**
      * Create the Three.js box representation
      * @param {object} options - Creation options
@@ -48,36 +48,36 @@ export class BoxVisualObject extends VisualObject {
         if (this._object3D) {
             return this._object3D;
         }
-        
+
         try {
             // Create geometry using factory
             this._geometry = geometryFactory.createBox(this._boxParams);
-            
+
             // Create material
             this._material = this.createMaterial('default');
             this._originalMaterial = this._material;
-            
+
             // Create mesh
             this._object3D = new THREE.Mesh(this._geometry, this._material);
             this._object3D.userData.visualObject = this;
             this._object3D.userData.nodeId = this._nodeId;
-            
+
             // Apply transform
             this._object3D.position.copy(this._position);
             this._object3D.rotation.copy(this._rotation);
             this._object3D.scale.copy(this._scale);
             this._object3D.visible = this._visible;
-            
+
             // Set name for debugging
             this._object3D.name = this._name;
-            
+
             return this._object3D;
         } catch (error) {
             console.error('Failed to create BoxVisualObject:', error);
             throw error;
         }
     }
-    
+
     /**
      * Update box parameters
      * @param {object} params - New parameters
@@ -85,27 +85,27 @@ export class BoxVisualObject extends VisualObject {
     updateParams(params) {
         const oldParams = { ...this._boxParams };
         this._boxParams = { ...this._boxParams, ...params };
-        
+
         // Check if geometry needs to be recreated
-        const geometryChanged = Object.keys(params).some(key => 
+        const geometryChanged = Object.keys(params).some(key =>
             key in oldParams && oldParams[key] !== this._boxParams[key]
         );
-        
+
         if (geometryChanged && this._object3D) {
             // Dispose old geometry
             if (this._geometry) {
                 this._geometry.dispose();
             }
-            
+
             // Create new geometry
             this._geometry = geometryFactory.createBox(this._boxParams);
             this._object3D.geometry = this._geometry;
         }
-        
+
         this.setProperty('boxParams', this._boxParams);
         this._markModified();
     }
-    
+
     /**
      * Get box dimensions
      * @returns {object}
@@ -117,7 +117,7 @@ export class BoxVisualObject extends VisualObject {
             depth: this._boxParams.depth
         };
     }
-    
+
     /**
      * Serialize box-specific data
      * @returns {object}
@@ -127,7 +127,7 @@ export class BoxVisualObject extends VisualObject {
         data.boxParams = { ...this._boxParams };
         return data;
     }
-    
+
     /**
      * Load box-specific data
      * @param {object} data
@@ -148,7 +148,7 @@ export class SphereVisualObject extends VisualObject {
         super(nodeId);
         this._type = 'SphereVisualObject';
         this._name = `Sphere_${this._id}`;
-        
+
         // Sphere-specific parameters
         this._sphereParams = {
             radius: 1,
@@ -160,47 +160,47 @@ export class SphereVisualObject extends VisualObject {
             thetaLength: Math.PI,
             ...params
         };
-        
+
         this.setProperty('type', this._type);
         this.setProperty('name', this._name);
         this.setProperty('sphereParams', this._sphereParams);
     }
-    
+
     async create(options = {}) {
         if (this._object3D) {
             return this._object3D;
         }
-        
+
         try {
             this._geometry = geometryFactory.createSphere(this._sphereParams);
             this._material = this.createMaterial('default');
             this._originalMaterial = this._material;
-            
+
             this._object3D = new THREE.Mesh(this._geometry, this._material);
             this._object3D.userData.visualObject = this;
             this._object3D.userData.nodeId = this._nodeId;
-            
+
             this._object3D.position.copy(this._position);
             this._object3D.rotation.copy(this._rotation);
             this._object3D.scale.copy(this._scale);
             this._object3D.visible = this._visible;
             this._object3D.name = this._name;
-            
+
             return this._object3D;
         } catch (error) {
             console.error('Failed to create SphereVisualObject:', error);
             throw error;
         }
     }
-    
+
     updateParams(params) {
         const oldParams = { ...this._sphereParams };
         this._sphereParams = { ...this._sphereParams, ...params };
-        
-        const geometryChanged = Object.keys(params).some(key => 
+
+        const geometryChanged = Object.keys(params).some(key =>
             key in oldParams && oldParams[key] !== this._sphereParams[key]
         );
-        
+
         if (geometryChanged && this._object3D) {
             if (this._geometry) {
                 this._geometry.dispose();
@@ -208,21 +208,21 @@ export class SphereVisualObject extends VisualObject {
             this._geometry = geometryFactory.createSphere(this._sphereParams);
             this._object3D.geometry = this._geometry;
         }
-        
+
         this.setProperty('sphereParams', this._sphereParams);
         this._markModified();
     }
-    
+
     getRadius() {
         return this._sphereParams.radius;
     }
-    
+
     toJSON() {
         const data = super.toJSON();
         data.sphereParams = { ...this._sphereParams };
         return data;
     }
-    
+
     fromJSON(data) {
         super.fromJSON(data);
         if (data.sphereParams) {
@@ -239,7 +239,7 @@ export class CylinderVisualObject extends VisualObject {
         super(nodeId);
         this._type = 'CylinderVisualObject';
         this._name = `Cylinder_${this._id}`;
-        
+
         this._cylinderParams = {
             radiusTop: 1,
             radiusBottom: 1,
@@ -251,47 +251,47 @@ export class CylinderVisualObject extends VisualObject {
             thetaLength: Math.PI * 2,
             ...params
         };
-        
+
         this.setProperty('type', this._type);
         this.setProperty('name', this._name);
         this.setProperty('cylinderParams', this._cylinderParams);
     }
-    
+
     async create(options = {}) {
         if (this._object3D) {
             return this._object3D;
         }
-        
+
         try {
             this._geometry = geometryFactory.createCylinder(this._cylinderParams);
             this._material = this.createMaterial('default');
             this._originalMaterial = this._material;
-            
+
             this._object3D = new THREE.Mesh(this._geometry, this._material);
             this._object3D.userData.visualObject = this;
             this._object3D.userData.nodeId = this._nodeId;
-            
+
             this._object3D.position.copy(this._position);
             this._object3D.rotation.copy(this._rotation);
             this._object3D.scale.copy(this._scale);
             this._object3D.visible = this._visible;
             this._object3D.name = this._name;
-            
+
             return this._object3D;
         } catch (error) {
             console.error('Failed to create CylinderVisualObject:', error);
             throw error;
         }
     }
-    
+
     updateParams(params) {
         const oldParams = { ...this._cylinderParams };
         this._cylinderParams = { ...this._cylinderParams, ...params };
-        
-        const geometryChanged = Object.keys(params).some(key => 
+
+        const geometryChanged = Object.keys(params).some(key =>
             key in oldParams && oldParams[key] !== this._cylinderParams[key]
         );
-        
+
         if (geometryChanged && this._object3D) {
             if (this._geometry) {
                 this._geometry.dispose();
@@ -299,11 +299,11 @@ export class CylinderVisualObject extends VisualObject {
             this._geometry = geometryFactory.createCylinder(this._cylinderParams);
             this._object3D.geometry = this._geometry;
         }
-        
+
         this.setProperty('cylinderParams', this._cylinderParams);
         this._markModified();
     }
-    
+
     getDimensions() {
         return {
             radiusTop: this._cylinderParams.radiusTop,
@@ -311,13 +311,13 @@ export class CylinderVisualObject extends VisualObject {
             height: this._cylinderParams.height
         };
     }
-    
+
     toJSON() {
         const data = super.toJSON();
         data.cylinderParams = { ...this._cylinderParams };
         return data;
     }
-    
+
     fromJSON(data) {
         super.fromJSON(data);
         if (data.cylinderParams) {
@@ -334,7 +334,7 @@ export class PlaneVisualObject extends VisualObject {
         super(nodeId);
         this._type = 'PlaneVisualObject';
         this._name = `Plane_${this._id}`;
-        
+
         this._planeParams = {
             width: 1,
             height: 1,
@@ -342,47 +342,47 @@ export class PlaneVisualObject extends VisualObject {
             heightSegments: 1,
             ...params
         };
-        
+
         this.setProperty('type', this._type);
         this.setProperty('name', this._name);
         this.setProperty('planeParams', this._planeParams);
     }
-    
+
     async create(options = {}) {
         if (this._object3D) {
             return this._object3D;
         }
-        
+
         try {
             this._geometry = geometryFactory.createPlane(this._planeParams);
             this._material = this.createMaterial('default');
             this._originalMaterial = this._material;
-            
+
             this._object3D = new THREE.Mesh(this._geometry, this._material);
             this._object3D.userData.visualObject = this;
             this._object3D.userData.nodeId = this._nodeId;
-            
+
             this._object3D.position.copy(this._position);
             this._object3D.rotation.copy(this._rotation);
             this._object3D.scale.copy(this._scale);
             this._object3D.visible = this._visible;
             this._object3D.name = this._name;
-            
+
             return this._object3D;
         } catch (error) {
             console.error('Failed to create PlaneVisualObject:', error);
             throw error;
         }
     }
-    
+
     updateParams(params) {
         const oldParams = { ...this._planeParams };
         this._planeParams = { ...this._planeParams, ...params };
-        
-        const geometryChanged = Object.keys(params).some(key => 
+
+        const geometryChanged = Object.keys(params).some(key =>
             key in oldParams && oldParams[key] !== this._planeParams[key]
         );
-        
+
         if (geometryChanged && this._object3D) {
             if (this._geometry) {
                 this._geometry.dispose();
@@ -390,21 +390,387 @@ export class PlaneVisualObject extends VisualObject {
             this._geometry = geometryFactory.createPlane(this._planeParams);
             this._object3D.geometry = this._geometry;
         }
-        
+
         this.setProperty('planeParams', this._planeParams);
         this._markModified();
     }
-    
+
     toJSON() {
         const data = super.toJSON();
         data.planeParams = { ...this._planeParams };
         return data;
     }
-    
+
     fromJSON(data) {
         super.fromJSON(data);
         if (data.planeParams) {
             this.updateParams(data.planeParams);
+        }
+    }
+}
+
+/**
+ * Cone Visual Object
+ */
+export class ConeVisualObject extends VisualObject {
+    constructor(nodeId = null, params = {}) {
+        super(nodeId);
+        this._type = 'ConeVisualObject';
+        this._name = `Cone_${this._id}`;
+
+        this._coneParams = {
+            radius: 1,
+            height: 2,
+            radialSegments: 32,
+            heightSegments: 1,
+            openEnded: false,
+            thetaStart: 0,
+            thetaLength: Math.PI * 2,
+            ...params
+        };
+
+        this.setProperty('type', this._type);
+        this.setProperty('name', this._name);
+        this.setProperty('coneParams', this._coneParams);
+    }
+
+    async create(options = {}) {
+        if (this._object3D) {
+            return this._object3D;
+        }
+
+        try {
+            this._geometry = geometryFactory.createCone(this._coneParams);
+            this._material = this.createMaterial('default');
+            this._originalMaterial = this._material;
+
+            this._object3D = new THREE.Mesh(this._geometry, this._material);
+            this._object3D.userData.visualObject = this;
+            this._object3D.userData.nodeId = this._nodeId;
+
+            this._object3D.position.copy(this._position);
+            this._object3D.rotation.copy(this._rotation);
+            this._object3D.scale.copy(this._scale);
+            this._object3D.visible = this._visible;
+            this._object3D.name = this._name;
+
+            return this._object3D;
+        } catch (error) {
+            console.error('Failed to create ConeVisualObject:', error);
+            throw error;
+        }
+    }
+
+    updateParams(params) {
+        const oldParams = { ...this._coneParams };
+        this._coneParams = { ...this._coneParams, ...params };
+
+        if (this._object3D && this._geometry) {
+            // Recreate geometry with new parameters
+            this._geometry.dispose();
+            this._geometry = geometryFactory.createCone(this._coneParams);
+            this._object3D.geometry = this._geometry;
+        }
+
+        this.setProperty('coneParams', this._coneParams);
+        this.notifyPropertyChanged('coneParams', this._coneParams, oldParams);
+    }
+
+    getRadius() {
+        return this._coneParams.radius;
+    }
+
+    getHeight() {
+        return this._coneParams.height;
+    }
+
+    getDimensions() {
+        return {
+            radius: this._coneParams.radius,
+            height: this._coneParams.height
+        };
+    }
+
+    fromJSON(data) {
+        super.fromJSON(data);
+        if (data.coneParams) {
+            this.updateParams(data.coneParams);
+        }
+    }
+}
+
+/**
+ * Torus Visual Object
+ */
+export class TorusVisualObject extends VisualObject {
+    constructor(nodeId = null, params = {}) {
+        super(nodeId);
+        this._type = 'TorusVisualObject';
+        this._name = `Torus_${this._id}`;
+
+        this._torusParams = {
+            radius: 1,
+            tube: 0.4,
+            radialSegments: 16,
+            tubularSegments: 100,
+            arc: Math.PI * 2,
+            ...params
+        };
+
+        this.setProperty('type', this._type);
+        this.setProperty('name', this._name);
+        this.setProperty('torusParams', this._torusParams);
+    }
+
+    async create(options = {}) {
+        if (this._object3D) {
+            return this._object3D;
+        }
+
+        try {
+            this._geometry = geometryFactory.createTorus(this._torusParams);
+            this._material = this.createMaterial('default');
+            this._originalMaterial = this._material;
+
+            this._object3D = new THREE.Mesh(this._geometry, this._material);
+            this._object3D.userData.visualObject = this;
+            this._object3D.userData.nodeId = this._nodeId;
+
+            this._object3D.position.copy(this._position);
+            this._object3D.rotation.copy(this._rotation);
+            this._object3D.scale.copy(this._scale);
+            this._object3D.visible = this._visible;
+            this._object3D.name = this._name;
+
+            return this._object3D;
+        } catch (error) {
+            console.error('Failed to create TorusVisualObject:', error);
+            throw error;
+        }
+    }
+
+    updateParams(params) {
+        const oldParams = { ...this._torusParams };
+        this._torusParams = { ...this._torusParams, ...params };
+
+        if (this._object3D && this._geometry) {
+            // Recreate geometry with new parameters
+            this._geometry.dispose();
+            this._geometry = geometryFactory.createTorus(this._torusParams);
+            this._object3D.geometry = this._geometry;
+        }
+
+        this.setProperty('torusParams', this._torusParams);
+        this.notifyPropertyChanged('torusParams', this._torusParams, oldParams);
+    }
+
+    getRadius() {
+        return this._torusParams.radius;
+    }
+
+    getTube() {
+        return this._torusParams.tube;
+    }
+
+    getDimensions() {
+        return {
+            radius: this._torusParams.radius,
+            tube: this._torusParams.tube
+        };
+    }
+
+    fromJSON(data) {
+        super.fromJSON(data);
+        if (data.torusParams) {
+            this.updateParams(data.torusParams);
+        }
+    }
+}
+
+/**
+ * Line Visual Object
+ */
+export class LineVisualObject extends VisualObject {
+    constructor(nodeId = null, params = {}) {
+        super(nodeId);
+        this._type = 'LineVisualObject';
+        this._name = `Line_${this._id}`;
+
+        this._lineParams = {
+            points: [
+                { x: 0, y: 0, z: 0 },
+                { x: 1, y: 0, z: 0 }
+            ],
+            ...params
+        };
+
+        this.setProperty('type', this._type);
+        this.setProperty('name', this._name);
+        this.setProperty('lineParams', this._lineParams);
+    }
+
+    async create(options = {}) {
+        if (this._object3D) {
+            return this._object3D;
+        }
+
+        try {
+            this._geometry = geometryFactory.createLine(this._lineParams);
+            this._material = this.createLineMaterial('default');
+            this._originalMaterial = this._material;
+
+            // Use Line instead of Mesh for line objects
+            this._object3D = new THREE.Line(this._geometry, this._material);
+            this._object3D.userData.visualObject = this;
+            this._object3D.userData.nodeId = this._nodeId;
+
+            this._object3D.position.copy(this._position);
+            this._object3D.rotation.copy(this._rotation);
+            this._object3D.scale.copy(this._scale);
+            this._object3D.visible = this._visible;
+            this._object3D.name = this._name;
+
+            return this._object3D;
+        } catch (error) {
+            console.error('Failed to create LineVisualObject:', error);
+            throw error;
+        }
+    }
+
+    createLineMaterial(state = 'default') {
+        const config = this._materialConfig[state] || this._materialConfig['default'];
+
+        return new THREE.LineBasicMaterial({
+            color: config.color || 0x00ff00,
+            opacity: config.opacity !== undefined ? config.opacity : 1.0,
+            transparent: config.transparent || config.opacity < 1.0,
+            linewidth: config.linewidth || 1
+        });
+    }
+
+    updateParams(params) {
+        const oldParams = { ...this._lineParams };
+        this._lineParams = { ...this._lineParams, ...params };
+
+        if (this._object3D && this._geometry) {
+            // Recreate geometry with new parameters
+            this._geometry.dispose();
+            this._geometry = geometryFactory.createLine(this._lineParams);
+            this._object3D.geometry = this._geometry;
+        }
+
+        this.setProperty('lineParams', this._lineParams);
+        this.notifyPropertyChanged('lineParams', this._lineParams, oldParams);
+    }
+
+    getPoints() {
+        return this._lineParams.points;
+    }
+
+    getLength() {
+        const points = this._lineParams.points;
+        let length = 0;
+
+        for (let i = 1; i < points.length; i++) {
+            const p1 = points[i - 1];
+            const p2 = points[i];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const dz = p2.z - p1.z;
+            length += Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+
+        return length;
+    }
+
+    fromJSON(data) {
+        super.fromJSON(data);
+        if (data.lineParams) {
+            this.updateParams(data.lineParams);
+        }
+    }
+}
+
+/**
+ * Circle Visual Object
+ */
+export class CircleVisualObject extends VisualObject {
+    constructor(nodeId = null, params = {}) {
+        super(nodeId);
+        this._type = 'CircleVisualObject';
+        this._name = `Circle_${this._id}`;
+
+        this._circleParams = {
+            radius: 1,
+            segments: 32,
+            thetaStart: 0,
+            thetaLength: Math.PI * 2,
+            ...params
+        };
+
+        this.setProperty('type', this._type);
+        this.setProperty('name', this._name);
+        this.setProperty('circleParams', this._circleParams);
+    }
+
+    async create(options = {}) {
+        if (this._object3D) {
+            return this._object3D;
+        }
+
+        try {
+            this._geometry = geometryFactory.createCircle(this._circleParams);
+            this._material = this.createMaterial('default');
+            this._originalMaterial = this._material;
+
+            this._object3D = new THREE.Mesh(this._geometry, this._material);
+            this._object3D.userData.visualObject = this;
+            this._object3D.userData.nodeId = this._nodeId;
+
+            this._object3D.position.copy(this._position);
+            this._object3D.rotation.copy(this._rotation);
+            this._object3D.scale.copy(this._scale);
+            this._object3D.visible = this._visible;
+            this._object3D.name = this._name;
+
+            return this._object3D;
+        } catch (error) {
+            console.error('Failed to create CircleVisualObject:', error);
+            throw error;
+        }
+    }
+
+    updateParams(params) {
+        const oldParams = { ...this._circleParams };
+        this._circleParams = { ...this._circleParams, ...params };
+
+        if (this._object3D && this._geometry) {
+            // Recreate geometry with new parameters
+            this._geometry.dispose();
+            this._geometry = geometryFactory.createCircle(this._circleParams);
+            this._object3D.geometry = this._geometry;
+        }
+
+        this.setProperty('circleParams', this._circleParams);
+        this.notifyPropertyChanged('circleParams', this._circleParams, oldParams);
+    }
+
+    getRadius() {
+        return this._circleParams.radius;
+    }
+
+    getArea() {
+        return Math.PI * this._circleParams.radius * this._circleParams.radius;
+    }
+
+    getCircumference() {
+        return 2 * Math.PI * this._circleParams.radius;
+    }
+
+    fromJSON(data) {
+        super.fromJSON(data);
+        if (data.circleParams) {
+            this.updateParams(data.circleParams);
         }
     }
 }
@@ -427,6 +793,14 @@ export function createVisualObject(type, nodeId = null, params = {}) {
             return new CylinderVisualObject(nodeId, params);
         case 'plane':
             return new PlaneVisualObject(nodeId, params);
+        case 'cone':
+            return new ConeVisualObject(nodeId, params);
+        case 'torus':
+            return new TorusVisualObject(nodeId, params);
+        case 'line':
+            return new LineVisualObject(nodeId, params);
+        case 'circle':
+            return new CircleVisualObject(nodeId, params);
         default:
             throw new Error(`Unsupported visual object type: ${type}`);
     }
@@ -437,5 +811,5 @@ export function createVisualObject(type, nodeId = null, params = {}) {
  * @returns {array}
  */
 export function getAvailableTypes() {
-    return ['box', 'sphere', 'cylinder', 'plane'];
+    return ['box', 'sphere', 'cylinder', 'plane', 'cone', 'torus', 'line', 'circle'];
 }

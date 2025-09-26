@@ -234,34 +234,102 @@ export default {
         switch (tool) {
           case 'box':
             console.log('Starting interactive box creation...')
-            // Start the interactive BoxCommand
-            const boxResult = await appStore.executeCommand('create-box')
+            // Start the interactive BoxCommand with dimension input
+            const boxResult = await appStore.executeCommand('create-box', {
+              useDimensionInput: true
+            })
             console.log('Interactive box creation completed:', boxResult)
             break
 
           case 'sphere':
             console.log('Starting interactive sphere creation...')
-            // Start the interactive SphereCommand
-            const sphereResult = await appStore.executeCommand('create-sphere')
+            // Start the interactive SphereCommand with dimension input
+            const sphereResult = await appStore.executeCommand('create-sphere', {
+              useDimensionInput: true
+            })
             console.log('Interactive sphere creation completed:', sphereResult)
             break
 
           case 'cylinder':
-            console.log('Cylinder tool selected - Interactive command not yet implemented')
-            console.log('Tool selected: Cylinder - Interactive command will be implemented in Phase 5.2')
+            console.log('Starting interactive cylinder creation...')
+            // Start the interactive CylinderCommand with dimension input
+            const cylinderResult = await appStore.executeCommand('create-cylinder', {
+              useDimensionInput: true
+            })
+            console.log('Interactive cylinder creation completed:', cylinderResult)
             break
 
           case 'plane':
-            console.log('Plane tool selected - Interactive command not yet implemented')
-            console.log('Tool selected: Plane - Interactive command will be implemented in Phase 5.2')
+            console.log('Starting interactive plane creation...')
+            // Start the interactive PlaneCommand with dimension input
+            const planeResult = await appStore.executeCommand('create-plane', {
+              useDimensionInput: true
+            })
+            console.log('Interactive plane creation completed:', planeResult)
             break
 
           case 'select':
+            console.log('Select tool activated - Interactive mode')
+            console.log('Tool selected: Select - Interactive mode active')
+            break
+
           case 'move':
+            console.log('Starting interactive move operation...')
+            try {
+              // Start the interactive MoveCommand
+              const moveResult = await appStore.executeCommand('move-objects', {
+                isInteractive: true,
+                useCurrentPosition: true
+              })
+              console.log('Interactive move operation completed:', moveResult)
+            } catch (error) {
+              if (error.message.includes('No objects selected')) {
+                console.log('Move tool selected: Please select objects first (use S key to activate selection, then click objects)')
+                alert('Move Tool: Please select one or more objects first.\n\n1. Press S to activate selection mode\n2. Click on objects to select them\n3. Then press M to move the selected objects')
+              } else {
+                console.error('Move command failed:', error)
+              }
+            }
+            break
+
           case 'rotate':
+            console.log('Starting interactive rotate operation...')
+            try {
+              // Start the interactive RotateCommand
+              const rotateResult = await appStore.executeCommand('rotate-objects', {
+                isInteractive: true,
+                rotationAxis: 'y',
+                useObjectCenter: true
+              })
+              console.log('Interactive rotate operation completed:', rotateResult)
+            } catch (error) {
+              if (error.message.includes('No objects selected')) {
+                console.log('Rotate tool selected: Please select objects first (use S key to activate selection, then click objects)')
+                alert('Rotate Tool: Please select one or more objects first.\n\n1. Press S to activate selection mode\n2. Click on objects to select them\n3. Then press R to rotate the selected objects')
+              } else {
+                console.error('Rotate command failed:', error)
+              }
+            }
+            break
+
           case 'scale':
-            console.log(`${tool} tool activated - Interactive mode`)
-            console.log(`Tool selected: ${tool.charAt(0).toUpperCase() + tool.slice(1)} - Interactive mode active`)
+            console.log('Starting interactive non-uniform scale operation...')
+            try {
+              // Always use non-uniform scaling (XYZ stretching)
+              const scaleResult = await appStore.executeCommand('scale-objects', {
+                isInteractive: true,
+                uniformScale: false, // Always use non-uniform scaling for XYZ stretching
+                useObjectCenter: true
+              })
+              console.log('Interactive scale operation completed:', scaleResult)
+            } catch (error) {
+              if (error.message.includes('No objects selected')) {
+                console.log('Scale tool selected: Please select objects first (use S key to activate selection, then click objects)')
+                alert('Scale Tool: Please select one or more objects first.\n\n1. Press S to activate selection mode\n2. Click on objects to select them\n3. Then press E to scale the selected objects\n\nScale along X, Y, Z axes independently')
+              } else {
+                console.error('Scale command failed:', error)
+              }
+            }
             break
 
           default:
