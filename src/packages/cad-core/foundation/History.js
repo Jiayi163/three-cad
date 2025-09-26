@@ -72,14 +72,14 @@ export class CollectionHistoryRecord extends IHistoryRecord {
       undo() {
       switch (this.action) {
         case 'add':
-          // 逆序删除，保证顺序一致
+          // Delete in reverse order to maintain consistency
           for (let i = this.items.length - 1; i >= 0; i--) {
             this.collection.remove(this.items[i])
           }
           break
         case 'remove':
           if (this.index >= 0) {
-            // 顺序插入到index + i，保证顺序一致
+            // Insert in order at index + i to maintain consistency
             for (let i = 0; i < this.items.length; i++) {
               this.collection.insert(this.index + i, this.items[i])
             }

@@ -1,6 +1,6 @@
 <template>
   <div class="main-layout">
-    <!-- 顶部菜单栏 -->
+    <!-- Top menu bar -->
     <div class="menu-bar">
       <div class="menu-bar-left">
         <div class="app-logo">
@@ -62,7 +62,7 @@
       </div>
     </div>
 
-    <!-- 主工具栏 -->
+    <!-- Main toolbar -->
     <div class="main-toolbar">
       <div class="toolbar-section">
         <div class="tool-group">
@@ -207,9 +207,9 @@
       </div>
     </div>
 
-    <!-- 主内容区域 -->
+    <!-- Main content area -->
     <div class="main-content">
-      <!-- 左侧面板 -->
+      <!-- Left panel -->
       <div
         v-if="panels.left.visible"
         class="side-panel left-panel"
@@ -228,7 +228,7 @@
         ></div>
       </div>
 
-      <!-- 中央视口区域 -->
+      <!-- Central viewport area -->
       <div class="viewport-area">
         <div class="viewport-header">
           <div class="viewport-tabs">
@@ -326,7 +326,7 @@
         </div>
       </div>
 
-      <!-- 右侧面板 -->
+      <!-- Right panel -->
       <div
         v-if="panels.right.visible"
         class="side-panel right-panel"
@@ -346,7 +346,7 @@
       </div>
     </div>
 
-    <!-- 层次结构面板 (浮动) -->
+    <!-- Hierarchy panel (floating) -->
     <div
       v-if="panels.hierarchy.visible"
       class="floating-panel hierarchy-panel"
@@ -366,10 +366,10 @@
       </div>
     </div>
 
-    <!-- 底部状态栏 -->
+    <!-- Bottom status bar -->
     <StatusBar @show-dev-debug="$emit('show-dev-debug', $event)" />
 
-    <!-- 右键上下文菜单 -->
+    <!-- Right-click context menu -->
     <div
       v-if="contextMenu.visible"
       class="context-menu"
@@ -386,7 +386,7 @@
       <div class="menu-option" @click="handleMenuAction('properties')">Properties</div>
     </div>
 
-    <!-- 帮助按钮 -->
+    <!-- Help button -->
     <Tooltip content="Keyboard Shortcuts" shortcut="Ctrl+?" position="left">
       <button
         class="help-button cad-button"
@@ -397,13 +397,13 @@
       </button>
     </Tooltip>
 
-    <!-- 键盘快捷键对话框 -->
+    <!-- Keyboard shortcuts dialog -->
     <KeyboardShortcuts
       :visible="showKeyboardShortcuts"
       @close="showKeyboardShortcuts = false"
     />
 
-    <!-- 点击遮罩层 - 关闭下拉菜单和上下文菜单 -->
+    <!-- Click overlay - close dropdown menus and context menu -->
     <div
       v-if="activeMenu || contextMenu.visible"
       class="menu-overlay"
@@ -448,14 +448,14 @@ export default {
       setPanelWidth
     } = usePanelState()
 
-    // UI状态
+    // UI state
     const activeMenu = ref(null)
     const activeTool = ref('select')
     const currentOperation = ref('')
     const showKeyboardShortcuts = ref(false)
     const showViewportControls = ref(false)
 
-    // 面板配置
+    // Panel configuration
     const panels = computed(() => ({
       left: {
         ...panelState.value.left,
@@ -474,18 +474,18 @@ export default {
       }
     }))
 
-    // 上下文菜单
+    // Context menu
     const contextMenu = ref({
       visible: false,
       x: 0,
       y: 0
     })
 
-    // 视口状态
+    // Viewport state
     const cursorPosition = ref('0, 0, 0')
     const zoomLevel = ref(100)
 
-    // 计算属性
+    // Computed properties
     const documentName = computed(() => {
       return appStore.activeDocument?.name || 'Untitled'
     })
@@ -510,12 +510,12 @@ export default {
       return appStore.activeDocument?.history?.canRedo || false
     })
 
-    // 方法
+    // Methods
     const handleMenuAction = (action) => {
       console.log('Menu action:', action)
       closeAllMenus()
 
-      // 处理内置操作
+      // Handle built-in operations
       switch (action) {
         case 'undo':
           if (appStore.activeDocument?.history?.canUndo) {
@@ -543,7 +543,7 @@ export default {
           setActiveTool('plane')
           break
         default:
-          // 发射事件让父组件处理
+          // Emit event for parent component to handle
           emit('menu-action', action)
           break
       }
@@ -582,7 +582,7 @@ export default {
       emit('viewport-action', 'toggle-axes')
     }
 
-    // 相机控制方法
+    // Camera control methods
     const setCameraView = (viewType) => {
       emit('viewport-action', `set-camera-${viewType}`)
     }
@@ -608,7 +608,7 @@ export default {
       contextMenu.value.visible = false
     }
 
-    // 面板调整大小
+    // Panel resizing
     const startResize = (panel, event) => {
       event.preventDefault()
       const startX = event.clientX
@@ -630,7 +630,7 @@ export default {
       document.addEventListener('mouseup', stopResize)
     }
 
-    // 右键菜单
+    // Right-click menu
     const showContextMenu = (event) => {
       event.preventDefault()
       contextMenu.value = {
@@ -644,23 +644,23 @@ export default {
       contextMenu.value.visible = false
     }
 
-    // 键盘快捷键
+    // Keyboard shortcuts
     const handleKeydown = (event) => {
-      // Ctrl+? 或 Ctrl+/ - 显示键盘快捷键帮助 (替代F1)
+      // Ctrl+? or Ctrl+/ - Show keyboard shortcuts help (alternative to F1)
       if ((event.ctrlKey || event.metaKey) && (event.key === '?' || event.key === '/')) {
         event.preventDefault()
         showKeyboardShortcuts.value = true
         return
       }
 
-      // ESC - 关闭所有弹出菜单和对话框
+      // ESC - Close all popup menus and dialogs
       if (event.key === 'Escape') {
         closeAllMenus()
         showKeyboardShortcuts.value = false
         return
       }
 
-      // Ctrl/Cmd + 键的组合
+      // Ctrl/Cmd + key combinations
       if (event.ctrlKey || event.metaKey) {
         switch (event.key) {
           case 'n':
@@ -697,14 +697,14 @@ export default {
             break
           case 'p':
             event.preventDefault()
-            // Ctrl+P 用于属性面板，不是创建平面
+            // Ctrl+P for properties panel, not create plane
             togglePanel('properties')
             break
         }
         return
       }
 
-      // 工具快捷键（只在没有输入框焦点时）
+      // Tool shortcuts (only when no input field is focused)
       if (!event.target.matches('input, textarea, [contenteditable]')) {
         switch (event.key.toLowerCase()) {
           case 's':
@@ -771,7 +771,7 @@ export default {
       }
     }
 
-    // 生命周期
+    // Lifecycle
     onMounted(() => {
       document.addEventListener('keydown', handleKeydown)
       document.addEventListener('contextmenu', showContextMenu)
@@ -788,7 +788,7 @@ export default {
       // Store
       appStore,
 
-      // UI状态
+      // UI state
       activeMenu,
       activeTool,
       currentOperation,
@@ -799,7 +799,7 @@ export default {
       cursorPosition,
       zoomLevel,
 
-      // 计算属性
+      // Computed properties
       documentName,
       hasUnsavedChanges,
       objectCount,
@@ -807,7 +807,7 @@ export default {
       canUndo,
       canRedo,
 
-      // 方法
+      // Methods
       handleMenuAction,
       setActiveTool,
       handleBoxClick,
@@ -839,7 +839,7 @@ export default {
   overflow: hidden;
 }
 
-/* 菜单栏样式 */
+/* Menu bar styles */
 .menu-bar {
   display: flex;
   justify-content: space-between;
@@ -941,7 +941,7 @@ export default {
   background-color: #28a745;
 }
 
-/* 工具栏样式 */
+/* Toolbar styles */
 .main-toolbar {
   display: flex;
   justify-content: space-between;
@@ -1010,7 +1010,7 @@ export default {
   gap: 2px;
 }
 
-/* 主内容区域样式 */
+/* Main content area styles */
 .main-content {
   display: flex;
   flex: 1;
@@ -1107,7 +1107,7 @@ export default {
   left: -2px;
 }
 
-/* 视口区域样式 */
+/* Viewport area styles */
 .viewport-area {
   flex: 1;
   display: flex;
@@ -1174,7 +1174,7 @@ export default {
   overflow: hidden;
 }
 
-/* 状态栏样式 */
+/* Status bar styles */
 .status-bar {
   display: flex;
   justify-content: space-between;
@@ -1208,7 +1208,7 @@ export default {
   font-weight: bold;
 }
 
-/* 上下文菜单样式 */
+/* Context menu styles */
 .context-menu {
   position: fixed;
   background-color: #2d2d30;
@@ -1220,7 +1220,7 @@ export default {
   min-width: 120px;
 }
 
-/* 菜单遮罩层 */
+/* Menu overlay */
 .menu-overlay {
   position: fixed;
   top: 0;
@@ -1230,7 +1230,7 @@ export default {
   z-index: 999;
 }
 
-/* 帮助按钮 */
+/* Help button */
 .help-button {
   position: fixed;
   bottom: var(--cad-spacing-xl);
@@ -1363,7 +1363,7 @@ export default {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* 响应式设计 */
+/* Responsive design */
 @media (max-width: 768px) {
   .main-menu {
     display: none;
@@ -1379,7 +1379,7 @@ export default {
   }
 }
 
-/* 滚动条样式 */
+/* Scrollbar styles */
 .panel-content::-webkit-scrollbar {
   width: 8px;
 }
@@ -1397,7 +1397,7 @@ export default {
   background: #007acc;
 }
 
-/* 浮动面板样式 */
+/* Floating panel styles */
 .floating-panel {
   position: fixed;
   background: var(--panel-bg, #2d2d30);

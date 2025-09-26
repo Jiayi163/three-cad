@@ -764,7 +764,7 @@ export default {
   z-index: 1000;
 }
 
-/* Debug content overlay (简化版本) */
+/* Debug content overlay (simplified version) */
 .debug-content-overlay {
   position: absolute;
   top: 10px;

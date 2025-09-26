@@ -60,18 +60,18 @@ export default {
   },
   emits: ['tool-click', 'tool-toggle'],
   setup(props, { emit }) {
-    // 将工具按组织化
+    // Organize tools by groups
     const toolGroups = computed(() => {
       if (!props.tools.length) {
         return getDefaultToolGroups()
       }
       
-      // 如果工具已经分组，直接使用
+      // If tools are already grouped, use directly
       if (props.tools[0].tools) {
         return props.tools
       }
       
-      // 否则，将所有工具放在一个默认组中
+      // Otherwise, put all tools in a default group
       return [{
         id: 'default',
         label: '',
@@ -90,7 +90,7 @@ export default {
       }
     }
 
-    // 默认工具组配置
+    // Default tool group configuration
     const getDefaultToolGroups = () => [
       {
         id: 'file',

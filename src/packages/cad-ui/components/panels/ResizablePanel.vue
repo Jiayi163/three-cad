@@ -8,7 +8,7 @@
     }"
     :style="panelStyle"
   >
-    <!-- 拖拽调整手柄 -->
+    <!-- Drag resize handle -->
     <div 
       v-if="resizable && !isCollapsed"
       class="resize-handle"
@@ -16,7 +16,7 @@
       @mousedown="startResize"
     ></div>
 
-    <!-- 面板头部 -->
+    <!-- Panel header -->
     <div class="panel-header" @dblclick="toggleCollapse">
       <div class="panel-title">
         <span v-if="icon" class="panel-icon">{{ icon }}</span>
@@ -54,12 +54,12 @@
       </div>
     </div>
 
-    <!-- 面板内容 -->
+    <!-- Panel content -->
     <div v-if="!isCollapsed" class="panel-content" :class="{ scrollable }">
       <slot></slot>
     </div>
 
-    <!-- 面板底部（可选） -->
+    <!-- Panel footer (optional) -->
     <div v-if="!isCollapsed && $slots.footer" class="panel-footer">
       <slot name="footer"></slot>
     </div>
@@ -150,7 +150,7 @@ export default {
     const isFloating = ref(props.floating)
     const isResizing = ref(false)
 
-    // 面板样式计算
+    // Panel style calculation
     const panelStyle = computed(() => {
       const style = {}
       
@@ -169,7 +169,7 @@ export default {
       return style
     })
 
-    // 开始调整大小
+    // Start resizing
     const startResize = (event) => {
       if (!props.resizable || isCollapsed.value) return
       
@@ -229,7 +229,7 @@ export default {
       }
     }
 
-    // 切换折叠状态
+    // Toggle collapse state
     const toggleCollapse = () => {
       isCollapsed.value = !isCollapsed.value
       if (isCollapsed.value) {
@@ -239,7 +239,7 @@ export default {
       }
     }
 
-    // 切换浮动状态
+    // Toggle floating state
     const toggleFloat = () => {
       isFloating.value = !isFloating.value
       if (isFloating.value) {
@@ -249,12 +249,12 @@ export default {
       }
     }
 
-    // 关闭面板
+    // Close panel
     const handleClose = () => {
       emit('close')
     }
 
-    // 监听属性变化
+    // Watch property changes
     watch(() => props.collapsed, (newVal) => {
       isCollapsed.value = newVal
     })
@@ -466,7 +466,7 @@ export default {
   font-size: 12px;
 }
 
-/* 滚动条样式 */
+/* Scrollbar styles */
 .panel-content::-webkit-scrollbar {
   width: 8px;
 }
@@ -484,7 +484,7 @@ export default {
   background: #007acc;
 }
 
-/* 动画效果 */
+/* Animation effects */
 .resizable-panel {
   transition: width 0.2s ease, height 0.2s ease;
 }
@@ -504,7 +504,7 @@ export default {
   }
 }
 
-/* 响应式设计 */
+/* Responsive design */
 @media (max-width: 768px) {
   .resizable-panel {
     min-width: 200px;

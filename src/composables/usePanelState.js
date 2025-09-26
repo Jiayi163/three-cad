@@ -2,7 +2,7 @@ import { ref, watch } from 'vue'
 
 const PANEL_STATE_KEY = 'cad-panel-state'
 
-// 默认面板状态
+// Default panel state
 const defaultPanelState = {
   left: {
     visible: true,
@@ -21,7 +21,7 @@ const defaultPanelState = {
   }
 }
 
-// 从 localStorage 加载面板状态
+// Load panel state from localStorage
 const loadPanelState = () => {
   try {
     const saved = localStorage.getItem(PANEL_STATE_KEY)
@@ -35,7 +35,7 @@ const loadPanelState = () => {
   return defaultPanelState
 }
 
-// 保存面板状态到 localStorage
+// Save panel state to localStorage
 const savePanelState = (state) => {
   try {
     localStorage.setItem(PANEL_STATE_KEY, JSON.stringify(state))
@@ -47,7 +47,7 @@ const savePanelState = (state) => {
 export function usePanelState() {
   const panelState = ref(loadPanelState())
 
-  // 监听面板状态变化并自动保存
+  // Watch panel state changes and auto-save
   watch(
     panelState,
     (newState) => {
@@ -56,55 +56,55 @@ export function usePanelState() {
     { deep: true }
   )
 
-  // 更新面板状态的方法
+  // Methods to update panel state
   const updatePanel = (panelName, updates) => {
     if (panelState.value[panelName]) {
       Object.assign(panelState.value[panelName], updates)
     }
   }
 
-  // 切换面板可见性
+  // Toggle panel visibility
   const togglePanel = (panelName) => {
     if (panelState.value[panelName]) {
       panelState.value[panelName].visible = !panelState.value[panelName].visible
     }
   }
 
-  // 切换面板折叠状态
+  // Toggle panel collapse state
   const togglePanelCollapse = (panelName) => {
     if (panelState.value[panelName]) {
       panelState.value[panelName].collapsed = !panelState.value[panelName].collapsed
     }
   }
 
-  // 设置面板宽度
+  // Set panel width
   const setPanelWidth = (panelName, width) => {
     if (panelState.value[panelName]) {
       panelState.value[panelName].width = Math.max(150, Math.min(600, width))
     }
   }
 
-  // 重置所有面板到默认状态
+  // Reset all panels to default state
   const resetPanels = () => {
     panelState.value = { ...defaultPanelState }
   }
 
-  // 获取面板状态
+  // Get panel state
   const getPanelState = (panelName) => {
     return panelState.value[panelName] || null
   }
 
-  // 检查面板是否可见
+  // Check if panel is visible
   const isPanelVisible = (panelName) => {
     return panelState.value[panelName]?.visible || false
   }
 
-  // 检查面板是否折叠
+  // Check if panel is collapsed
   const isPanelCollapsed = (panelName) => {
     return panelState.value[panelName]?.collapsed || false
   }
 
-  // 获取面板宽度
+  // Get panel width
   const getPanelWidth = (panelName) => {
     return panelState.value[panelName]?.width || 250
   }

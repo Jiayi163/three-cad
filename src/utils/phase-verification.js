@@ -1,6 +1,6 @@
 /**
  * Phase 4.3 Verification Script
- * 检测Phase 4.3 - 样式和润色是否完成
+ * Check if Phase 4.3 - Styling and Polish is completed
  */
 
 export function verifyPhase43() {
@@ -10,7 +10,7 @@ export function verifyPhase43() {
     checks: []
   };
 
-  // 检查1: CAD主题文件是否存在
+  // Check 1: Whether CAD theme files exist
   const themeCheck = {
     name: '1. CAD Theme System',
     passed: false,
@@ -18,7 +18,7 @@ export function verifyPhase43() {
   };
 
   try {
-    // 检查CSS变量是否定义
+    // Check if CSS variables are defined
     const rootStyles = getComputedStyle(document.documentElement);
     const primaryColor = rootStyles.getPropertyValue('--cad-primary');
     const bgColor = rootStyles.getPropertyValue('--cad-bg-primary');
@@ -35,7 +35,7 @@ export function verifyPhase43() {
 
   results.checks.push(themeCheck);
 
-  // 检查2: 图标系统
+  // Check 2: Icon system
   const iconCheck = {
     name: '2. Icon System',
     passed: false,
@@ -52,14 +52,14 @@ export function verifyPhase43() {
 
   results.checks.push(iconCheck);
 
-  // 检查3: 工具提示系统
+  // Check 3: Tooltip system
   const tooltipCheck = {
     name: '3. Tooltip System',
     passed: false,
     details: []
   };
 
-  // 检查是否有工具提示组件
+  // Check if tooltip components exist
   const tooltipElements = document.querySelectorAll('[class*="tooltip"]');
   if (tooltipElements.length > 0) {
     tooltipCheck.passed = true;
@@ -70,14 +70,14 @@ export function verifyPhase43() {
 
   results.checks.push(tooltipCheck);
 
-  // 检查4: 键盘快捷键帮助
+  // Check 4: Keyboard shortcuts help
   const shortcutsCheck = {
     name: '4. Keyboard Shortcuts Help',
     passed: false,
     details: []
   };
 
-  // 检查帮助按钮
+  // Check help button
   const helpButton = document.querySelector('.help-button');
   if (helpButton) {
     shortcutsCheck.passed = true;
@@ -88,7 +88,7 @@ export function verifyPhase43() {
 
   results.checks.push(shortcutsCheck);
 
-  // 检查5: 专业CAD按钮样式
+  // Check 5: Professional CAD button styling
   const buttonCheck = {
     name: '5. Professional Button Styling',
     passed: false,
@@ -105,7 +105,7 @@ export function verifyPhase43() {
 
   results.checks.push(buttonCheck);
 
-  // 计算总体结果
+  // Calculate overall result
   const passedChecks = results.checks.filter(check => check.passed).length;
   const totalChecks = results.checks.length;
   results.overall = passedChecks === totalChecks;
@@ -114,7 +114,7 @@ export function verifyPhase43() {
   return results;
 }
 
-// 在控制台显示验证结果
+// Display verification results in console
 export function displayVerificationResults() {
   const results = verifyPhase43();
 
@@ -141,12 +141,12 @@ export function displayVerificationResults() {
   return results;
 }
 
-// 自动运行验证（仅在开发模式）
+// Auto-run verification (development mode only)
 if (typeof window !== 'undefined') {
-  // 立即添加到window对象
+  // Immediately add to window object
   window.verifyPhase43 = displayVerificationResults;
 
-  // 延迟显示提示，确保页面加载完成
+  // Delayed display of hints to ensure page loading is complete
   setTimeout(() => {
     console.log('%c🔍 Phase 4.3 Verification Available!', 'font-size: 14px; font-weight: bold; color: #007acc;');
     console.log('%c💡 Run verifyPhase43() in console to check Phase 4.3 completion',

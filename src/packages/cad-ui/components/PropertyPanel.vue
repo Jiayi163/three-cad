@@ -9,7 +9,7 @@
     </div>
 
     <div v-else class="property-content">
-      <!-- 对象基本信息 -->
+      <!-- Object basic information -->
       <div class="property-section">
         <div class="section-header">
           <span class="section-title">Object Info</span>
@@ -39,14 +39,14 @@
         </div>
       </div>
 
-      <!-- 变换属性 -->
+      <!-- Transform properties -->
       <div class="property-section">
         <div class="section-header">
           <span class="section-title">Transform</span>
           <button class="section-action" @click="resetTransform" title="Reset Transform">↺</button>
         </div>
         <div class="property-grid">
-          <!-- 位置 -->
+          <!-- Position -->
           <div class="property-group">
             <label class="group-label">Position</label>
             <div class="vector-input">
@@ -83,7 +83,7 @@
             </div>
           </div>
 
-          <!-- 旋转 -->
+          <!-- Rotation -->
           <div class="property-group">
             <label class="group-label">Rotation (degrees)</label>
             <div class="vector-input">
@@ -120,7 +120,7 @@
             </div>
           </div>
 
-          <!-- 缩放 -->
+          <!-- Scale -->
           <div class="property-group">
             <label class="group-label">Scale</label>
             <div class="scale-input">
@@ -175,7 +175,7 @@
         </div>
       </div>
 
-      <!-- 几何属性 -->
+      <!-- Geometry properties -->
       <div v-if="geometryProperties" class="property-section">
         <div class="section-header">
           <span class="section-title">Geometry</span>
@@ -215,7 +215,7 @@
         </div>
       </div>
 
-      <!-- 材质属性 -->
+      <!-- Material properties -->
       <div class="property-section">
         <div class="section-header">
           <span class="section-title">Material</span>
@@ -265,7 +265,7 @@
         </div>
       </div>
 
-      <!-- 可见性和锁定 -->
+      <!-- Visibility and lock -->
       <div class="property-section">
         <div class="section-header">
           <span class="section-title">Visibility & Lock</span>
@@ -292,7 +292,7 @@
         </div>
       </div>
 
-      <!-- 自定义属性 -->
+      <!-- Custom properties -->
       <div v-if="customProperties.length > 0" class="property-section">
         <div class="section-header">
           <span class="section-title">Custom Properties</span>
@@ -339,12 +339,12 @@ export default {
   setup() {
     const appStore = useApplicationStore()
     
-    // 状态
+    // State
     const editableName = ref('')
     const uniformScale = ref(true)
     const customProperties = ref([])
 
-    // 计算属性
+    // Computed properties
     const selectedNode = computed(() => {
       return appStore.activeDocument?.selectedNodes?.[0] || null
     })
@@ -352,7 +352,7 @@ export default {
     const geometryProperties = computed(() => {
       if (!selectedNode.value) return null
       
-      // 从节点获取几何属性
+      // Get geometry properties from node
       const props = selectedNode.value.getProperty('geometry') || {}
       return Object.keys(props).length > 0 ? props : null
     })
@@ -380,7 +380,7 @@ export default {
       return selectedNode.value?.getProperty('locked') ?? false
     })
 
-    // 监听选中节点变化
+    // Watch selected node changes
     watch(selectedNode, (newNode) => {
       if (newNode) {
         editableName.value = newNode.name || ''
@@ -391,7 +391,7 @@ export default {
       }
     }, { immediate: true })
 
-    // 方法
+    // Methods
     const updateNodeProperty = (property, value) => {
       if (!selectedNode.value) return
       
@@ -461,7 +461,7 @@ export default {
       
       const geometry = selectedNode.value.getProperty('geometry') || {}
       
-      // 转换值类型
+      // Convert value type
       if (typeof geometry[property] === 'number') {
         value = parseFloat(value) || 0
       } else if (typeof geometry[property] === 'boolean') {
@@ -535,12 +535,12 @@ export default {
     }
 
     return {
-      // 状态
+      // State
       editableName,
       uniformScale,
       customProperties,
       
-      // 计算属性
+      // Computed properties
       selectedNode,
       geometryProperties,
       materialColor,
@@ -549,7 +549,7 @@ export default {
       nodeVisible,
       nodeLocked,
       
-      // 方法
+      // Methods
       updateNodeProperty,
       getTransformValue,
       updateTransform,
@@ -842,7 +842,7 @@ export default {
   background-color: #c82333;
 }
 
-/* 滚动条样式 */
+/* Scrollbar styles */
 .property-panel::-webkit-scrollbar {
   width: 6px;
 }
