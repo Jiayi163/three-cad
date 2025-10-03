@@ -10,6 +10,14 @@ const router = createRouter({
       meta: {
         title: 'CAD Workspace'
       }
+    },
+    // Note: Material demo routes removed - use material system in main workspace
+    // Demo components are available in src/components/MaterialDemo*.vue for testing
+
+    // Catch-all route - redirect any unknown paths to workspace
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/'
     }
   ]
 })
@@ -20,4 +28,4 @@ router.beforeEach((to, from, next) => {
   next()
 })
 
-export default router 
+export default router

@@ -140,19 +140,39 @@ export default {
     }
 
     const handleNodeSelect = (nodeId, multiSelect = false) => {
-      if (multiSelect) {
-        if (selectedNodes.has(nodeId)) {
-          selectedNodes.delete(nodeId)
-        } else {
-          selectedNodes.add(nodeId)
+      try {
+        const document = appStore.activeDocument
+        if (!document) {
+          console.warn('No active document')
+          return
         }
-      } else {
-        selectedNodes.clear()
-        selectedNodes.add(nodeId)
-      }
 
-      // Update document selection
-      appStore.setSelection(Array.from(selectedNodes))
+        // Find the node by ID
+        const node = document.findNodeById(nodeId)
+        if (!node) {
+          console.warn('Node not found:', nodeId)
+          return
+        }
+
+        if (multiSelect) {
+          // Multi-select: toggle selection
+          if (selectedNodes.has(nodeId)) {
+            selectedNodes.delete(nodeId)
+            appStore.deselectNode(node)
+          } else {
+            selectedNodes.add(nodeId)
+            appStore.selectNode(node, true) // true = addToSelection
+          }
+        } else {
+          // Single select: clear and select
+          selectedNodes.clear()
+          selectedNodes.add(nodeId)
+          appStore.clearSelection()
+          appStore.selectNode(node, false)
+        }
+      } catch (error) {
+        console.error('Error selecting node:', error)
+      }
     }
 
     const handleToggleExpand = (nodeId) => {

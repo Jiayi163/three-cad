@@ -65,12 +65,12 @@ export default {
       if (!props.tools.length) {
         return getDefaultToolGroups()
       }
-      
+
       // If tools are already grouped, use directly
       if (props.tools[0].tools) {
         return props.tools
       }
-      
+
       // Otherwise, put all tools in a default group
       return [{
         id: 'default',
@@ -291,7 +291,7 @@ export default {
   .tool-text {
     display: none;
   }
-  
+
   .tool-button:has(.tool-text) {
     width: 32px;
     min-width: 32px;

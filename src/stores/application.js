@@ -162,6 +162,61 @@ export const useApplicationStore = defineStore('application', () => {
     }
   }
 
+  async function exportDocument(document = null, filename = null, options = {}) {
+    const { ProjectExporter } = await import('../packages/cad-core/io/index.js')
+
+    if (!cadApplication.value) {
+      throw new Error('Application not initialized')
+    }
+
+    const targetDocument = document || activeDocument.value
+    if (!targetDocument) {
+      throw new Error('No document to export')
+    }
+
+    try {
+      const exportedFilename = await ProjectExporter.exportAndDownload(
+        targetDocument,
+        filename,
+        options
+      )
+      console.log(`Document exported: ${exportedFilename}`)
+      return exportedFilename
+    } catch (err) {
+      error.value = err.message
+      throw err
+    }
+  }
+
+  async function importDocument(file) {
+    const { ProjectImporter } = await import('../packages/cad-core/io/index.js')
+
+    if (!cadApplication.value) {
+      throw new Error('Application not initialized')
+    }
+
+    try {
+      const document = await ProjectImporter.importFromFile(file, cadApplication.value)
+      syncDocumentState()
+      console.log(`Document imported: ${document.name}`)
+      return document
+    } catch (err) {
+      error.value = err.message
+      throw err
+    }
+  }
+
+  async function validateImportFile(file) {
+    const { ProjectImporter } = await import('../packages/cad-core/io/index.js')
+
+    try {
+      return await ProjectImporter.validateFile(file)
+    } catch (err) {
+      error.value = err.message
+      throw err
+    }
+  }
+
   function closeDocument(document = null) {
     if (!cadApplication.value) {
       throw new Error('Application not initialized')
@@ -215,6 +270,30 @@ export const useApplicationStore = defineStore('application', () => {
       syncSelectionState()
       return result
     } catch (err) {
+      error.value = err.message
+      throw err
+    }
+  }
+
+  function deleteNode(nodeId) {
+    const document = activeDocument.value
+    if (!document) {
+      throw new Error('No active document')
+    }
+
+    try {
+      const node = document.findNodeById(nodeId)
+
+      if (!node) {
+        throw new Error(`Node with id ${nodeId} not found`)
+      }
+
+      const result = document.removeNode(node)
+      syncSelectionState()
+
+      return result
+    } catch (err) {
+      console.error('Error deleting node:', err)
       error.value = err.message
       throw err
     }
@@ -275,11 +354,15 @@ export const useApplicationStore = defineStore('application', () => {
     }
 
     try {
+      console.log('Application store undo called')
       const result = cadApplication.value.undo()
+      console.log('CADApplication undo result:', result)
       syncHistoryState()
       syncSelectionState()
+      console.log('Undo completed, canUndo:', canUndo.value, 'canRedo:', canRedo.value)
       return result
     } catch (err) {
+      console.error('Undo error:', err)
       error.value = err.message
       throw err
     }
@@ -291,11 +374,15 @@ export const useApplicationStore = defineStore('application', () => {
     }
 
     try {
+      console.log('Application store redo called')
       const result = cadApplication.value.redo()
+      console.log('CADApplication redo result:', result)
       syncHistoryState()
       syncSelectionState()
+      console.log('Redo completed, canUndo:', canUndo.value, 'canRedo:', canRedo.value)
       return result
     } catch (err) {
+      console.error('Redo error:', err)
       error.value = err.message
       throw err
     }
@@ -1087,12 +1174,16 @@ export const useApplicationStore = defineStore('application', () => {
     createNewDocument,
     openDocument,
     saveDocument,
+    exportDocument,
+    importDocument,
+    validateImportFile,
     closeDocument,
     setActiveDocument,
 
     // Node management
     addNode,
     removeNode,
+    deleteNode,
     selectNode,
     deselectNode,
     clearSelection,

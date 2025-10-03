@@ -1,15 +1,15 @@
 <template>
-  <div 
-    class="resizable-panel" 
-    :class="{ 
+  <div
+    class="resizable-panel"
+    :class="{
       collapsed: isCollapsed,
       floating: isFloating,
-      [`side-${side}`]: true 
+      [`side-${side}`]: true
     }"
     :style="panelStyle"
   >
     <!-- Drag resize handle -->
-    <div 
+    <div
       v-if="resizable && !isCollapsed"
       class="resize-handle"
       :class="`resize-${side}`"
@@ -23,7 +23,7 @@
         <span class="title-text">{{ title }}</span>
         <span v-if="badge" class="panel-badge">{{ badge }}</span>
       </div>
-      
+
       <div class="panel-actions">
         <button
           v-if="collapsible"
@@ -33,7 +33,7 @@
         >
           {{ isCollapsed ? '▶' : '▼' }}
         </button>
-        
+
         <button
           v-if="floatable"
           class="action-button"
@@ -42,7 +42,7 @@
         >
           {{ isFloating ? '📌' : '🪟' }}
         </button>
-        
+
         <button
           v-if="closable"
           class="action-button close-button"
@@ -153,7 +153,7 @@ export default {
     // Panel style calculation
     const panelStyle = computed(() => {
       const style = {}
-      
+
       if (props.side === 'left' || props.side === 'right') {
         style.width = isCollapsed.value ? '32px' : `${currentWidth.value}px`
         if (isFloating.value) {
@@ -165,28 +165,28 @@ export default {
           style.width = `${currentWidth.value}px`
         }
       }
-      
+
       return style
     })
 
     // Start resizing
     const startResize = (event) => {
       if (!props.resizable || isCollapsed.value) return
-      
+
       event.preventDefault()
       isResizing.value = true
-      
+
       const startX = event.clientX
       const startY = event.clientY
       const startWidth = currentWidth.value
       const startHeight = currentHeight.value
-      
+
       const handleMouseMove = (e) => {
         if (!isResizing.value) return
-        
+
         const deltaX = e.clientX - startX
         const deltaY = e.clientY - startY
-        
+
         if (props.side === 'left' || props.side === 'right') {
           const multiplier = props.side === 'left' ? 1 : -1
           let newWidth = startWidth + (deltaX * multiplier)
@@ -201,7 +201,7 @@ export default {
           emit('resize', { width: currentWidth.value, height: newHeight })
         }
       }
-      
+
       const handleMouseUp = () => {
         isResizing.value = false
         document.removeEventListener('mousemove', handleMouseMove)
@@ -209,7 +209,7 @@ export default {
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
       }
-      
+
       document.addEventListener('mousemove', handleMouseMove)
       document.addEventListener('mouseup', handleMouseUp)
       document.body.style.cursor = getResizeCursor()
@@ -509,11 +509,11 @@ export default {
   .resizable-panel {
     min-width: 200px;
   }
-  
+
   .panel-header {
     padding: 0 8px;
   }
-  
+
   .title-text {
     font-size: 11px;
   }

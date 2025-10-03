@@ -12,11 +12,13 @@
             File
             <div v-if="activeMenu === 'file'" class="dropdown-menu">
               <div class="menu-option" @click="handleMenuAction('new')">New Document</div>
+              <div class="menu-divider"></div>
+              <div class="menu-option" @click="handleMenuAction('import')">Import Project...</div>
+              <div class="menu-option" @click="handleMenuAction('export')">Export Project...</div>
+              <div class="menu-divider"></div>
               <div class="menu-option" @click="handleMenuAction('open')">Open...</div>
               <div class="menu-option" @click="handleMenuAction('save')">Save</div>
               <div class="menu-option" @click="handleMenuAction('save-as')">Save As...</div>
-              <div class="menu-divider"></div>
-              <div class="menu-option" @click="handleMenuAction('export')">Export...</div>
             </div>
           </div>
           <div class="menu-item" @click="activeMenu = activeMenu === 'edit' ? null : 'edit'">
@@ -36,7 +38,6 @@
               <div class="menu-option" @click="handleMenuAction('zoom-fit')">Zoom to Fit</div>
               <div class="menu-option" @click="handleMenuAction('zoom-selection')">Zoom to Selection</div>
               <div class="menu-divider"></div>
-              <div class="menu-option" @click="togglePanel('hierarchy')">Object Hierarchy</div>
               <div class="menu-option" @click="togglePanel('tools')">Tool Palette</div>
               <div class="menu-option" @click="togglePanel('properties')">Properties Panel</div>
               <div class="menu-divider"></div>
@@ -86,6 +87,21 @@
         <div class="toolbar-divider"></div>
 
         <div class="tool-group">
+          <Tooltip content="Import Project">
+            <button class="cad-button tool-button" @click="openImportDialog">
+              <i class="cad-icon">📥</i>
+            </button>
+          </Tooltip>
+          <Tooltip content="Export Project">
+            <button class="cad-button tool-button" @click="openExportDialog" :disabled="!appStore.activeDocument">
+              <i class="cad-icon">📤</i>
+            </button>
+          </Tooltip>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <div class="tool-group">
           <Tooltip content="Undo" shortcut="Ctrl+Z">
             <button
               class="cad-button tool-button"
@@ -108,6 +124,7 @@
 
         <div class="toolbar-divider"></div>
 
+        <!-- Selection Tools -->
         <div class="tool-group">
           <Tooltip content="Select Tool" shortcut="S">
             <button
@@ -118,6 +135,36 @@
               <i class="cad-icon cad-icon-select"></i>
             </button>
           </Tooltip>
+          <Tooltip content="Select All" shortcut="Ctrl+A">
+            <button
+              class="cad-button tool-button"
+              @click="handleMenuAction('select-all')"
+            >
+              <i class="cad-icon">☑️</i>
+            </button>
+          </Tooltip>
+          <Tooltip content="Deselect All">
+            <button
+              class="cad-button tool-button"
+              @click="handleMenuAction('deselect-all')"
+            >
+              <i class="cad-icon">⬜</i>
+            </button>
+          </Tooltip>
+          <Tooltip content="Invert Selection">
+            <button
+              class="cad-button tool-button"
+              @click="handleMenuAction('invert-selection')"
+            >
+              <i class="cad-icon">🔄</i>
+            </button>
+          </Tooltip>
+        </div>
+
+        <div class="toolbar-divider"></div>
+
+        <!-- Modify Tools -->
+        <div class="tool-group">
           <Tooltip content="Move Tool" shortcut="M">
             <button
               class="cad-button tool-button"
@@ -149,6 +196,7 @@
 
         <div class="toolbar-divider"></div>
 
+        <!-- Create Tools -->
         <div class="tool-group">
           <Tooltip content="Create Box" shortcut="B">
             <button
@@ -186,11 +234,41 @@
               <i class="cad-icon cad-icon-plane"></i>
             </button>
           </Tooltip>
+          <Tooltip content="Create Cone">
+            <button
+              class="cad-button tool-button"
+              :class="{ active: activeTool === 'cone' }"
+              @click="setActiveTool('cone')"
+            >
+              <i class="cad-icon">🔺</i>
+            </button>
+          </Tooltip>
+          <Tooltip content="Create Torus">
+            <button
+              class="cad-button tool-button"
+              :class="{ active: activeTool === 'torus' }"
+              @click="setActiveTool('torus')"
+            >
+              <i class="cad-icon">⭕</i>
+            </button>
+          </Tooltip>
         </div>
       </div>
 
       <div class="toolbar-section toolbar-right">
         <div class="view-controls">
+          <button
+            class="material-button"
+            :class="{ active: showMaterialPanel }"
+            @click="showMaterialPanel = !showMaterialPanel"
+            title="Open Material Selection Panel"
+          >
+            <span class="button-icon">🎨</span>
+            <span class="button-text">Materials</span>
+          </button>
+
+          <div class="toolbar-divider"></div>
+
           <button class="tool-button" @click="handleMenuAction('zoom-fit')" title="Zoom to Fit">
             🔍
           </button>
@@ -209,8 +287,8 @@
 
     <!-- Main content area -->
     <div class="main-content">
-      <!-- Left panel -->
-      <div
+      <!-- Left panel removed - tools are now in top toolbar -->
+      <!-- <div
         v-if="panels.left.visible"
         class="side-panel left-panel"
         :style="{ width: panels.left.width + 'px' }"
@@ -226,10 +304,15 @@
           class="panel-resizer right"
           @mousedown="startResize('left', $event)"
         ></div>
-      </div>
+      </div> -->
 
       <!-- Central viewport area -->
       <div class="viewport-area">
+        <!-- Material Panel (Floating) -->
+        <div v-if="showMaterialPanel" class="floating-material-panel">
+          <SimpleMaterialPanel />
+        </div>
+
         <div class="viewport-header">
           <div class="viewport-tabs">
             <div class="viewport-tab active">
@@ -346,26 +429,6 @@
       </div>
     </div>
 
-    <!-- Hierarchy panel (floating) -->
-    <div
-      v-if="panels.hierarchy.visible"
-      class="floating-panel hierarchy-panel"
-      :style="{
-        right: '20px',
-        top: '100px',
-        width: panels.hierarchy.width + 'px',
-        height: '400px'
-      }"
-    >
-      <div class="panel-header">
-        <span class="panel-title">{{ panels.hierarchy.title }}</span>
-        <button class="panel-close" @click="panels.hierarchy.visible = false">×</button>
-      </div>
-      <div class="panel-content">
-        <component :is="panels.hierarchy.component" v-if="panels.hierarchy.component" />
-      </div>
-    </div>
-
     <!-- Bottom status bar -->
     <StatusBar @show-dev-debug="$emit('show-dev-debug', $event)" />
 
@@ -403,6 +466,18 @@
       @close="showKeyboardShortcuts = false"
     />
 
+    <!-- Import/Export Dialog -->
+    <ImportExportDialog
+      :is-open="showImportExportDialog"
+      :mode="importExportMode"
+      :document="appStore.activeDocument"
+      :application="appStore.cadApplication"
+      @close="showImportExportDialog = false"
+      @export-complete="handleExportComplete"
+      @import-complete="handleImportComplete"
+      @error="handleImportExportError"
+    />
+
     <!-- Click overlay - close dropdown menus and context menu -->
     <div
       v-if="activeMenu || contextMenu.visible"
@@ -414,24 +489,27 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useApplicationStore } from '@/stores/application'
 import { usePanelState } from '@/composables/usePanelState'
 import ToolPalette from '@/packages/cad-ui/components/ToolPalette.vue'
-import ObjectHierarchy from '@/packages/cad-ui/components/ObjectHierarchy.vue'
 import PropertyPanel from '@/packages/cad-ui/components/PropertyPanel.vue'
 import StatusBar from '@/packages/cad-ui/components/StatusBar.vue'
 import Tooltip from '@/components/ui/Tooltip.vue'
+import SimpleMaterialPanel from '@/components/SimpleMaterialPanel.vue'
 import KeyboardShortcuts from '@/components/ui/KeyboardShortcuts.vue'
+import ImportExportDialog from '@/packages/cad-ui/components/ImportExportDialog.vue'
 
 export default {
   name: 'MainLayout',
   components: {
     ToolPalette,
-    ObjectHierarchy,
     PropertyPanel,
     StatusBar,
     Tooltip,
-    KeyboardShortcuts
+    SimpleMaterialPanel,
+    KeyboardShortcuts,
+    ImportExportDialog
   },
   emits: [
     'menu-action',
@@ -441,6 +519,7 @@ export default {
     'show-dev-debug'
   ],
   setup(props, { emit }) {
+    const router = useRouter()
     const appStore = useApplicationStore()
     const {
       panelState,
@@ -454,11 +533,15 @@ export default {
     const currentOperation = ref('')
     const showKeyboardShortcuts = ref(false)
     const showViewportControls = ref(false)
+    const showMaterialPanel = ref(false)
+    const showImportExportDialog = ref(false)
+    const importExportMode = ref('export') // 'export' or 'import'
 
     // Panel configuration
     const panels = computed(() => ({
       left: {
         ...panelState.value.left,
+        visible: false, // Hide left panel - tools moved to top toolbar
         title: 'Tool Palette',
         component: 'ToolPalette'
       },
@@ -466,11 +549,6 @@ export default {
         ...panelState.value.right,
         title: 'Properties',
         component: 'PropertyPanel'
-      },
-      hierarchy: {
-        ...panelState.value.hierarchy,
-        title: 'Object Hierarchy',
-        component: 'ObjectHierarchy'
       }
     }))
 
@@ -503,14 +581,19 @@ export default {
     })
 
     const canUndo = computed(() => {
-      return appStore.activeDocument?.history?.canUndo || false
+      return appStore.canUndo || false
     })
 
     const canRedo = computed(() => {
-      return appStore.activeDocument?.history?.canRedo || false
+      return appStore.canRedo || false
     })
 
     // Methods
+    const navigateTo = (path) => {
+      router.push(path)
+      closeAllMenus()
+    }
+
     const handleMenuAction = (action) => {
       console.log('Menu action:', action)
       closeAllMenus()
@@ -518,17 +601,29 @@ export default {
       // Handle built-in operations
       switch (action) {
         case 'undo':
-          if (appStore.activeDocument?.history?.canUndo) {
-            appStore.activeDocument.history.undo()
+          try {
+            appStore.undo()
+            console.log('Undo operation completed')
+          } catch (error) {
+            console.error('Undo failed:', error)
           }
           break
         case 'redo':
-          if (appStore.activeDocument?.history?.canRedo) {
-            appStore.activeDocument.history.redo()
+          try {
+            appStore.redo()
+            console.log('Redo operation completed')
+          } catch (error) {
+            console.error('Redo failed:', error)
           }
           break
         case 'new':
           appStore.createNewDocument('Untitled')
+          break
+        case 'export':
+          openExportDialog()
+          break
+        case 'import':
+          openImportDialog()
           break
         case 'create-box':
           setActiveTool('box')
@@ -541,6 +636,27 @@ export default {
           break
         case 'create-plane':
           setActiveTool('plane')
+          break
+        case 'create-cone':
+          setActiveTool('cone')
+          break
+        case 'create-torus':
+          setActiveTool('torus')
+          break
+        case 'select-all':
+          if (appStore.activeDocument) {
+            appStore.executeCommandLegacy('selectAll')
+          }
+          break
+        case 'deselect-all':
+          if (appStore.activeDocument) {
+            appStore.executeCommandLegacy('deselectAll')
+          }
+          break
+        case 'invert-selection':
+          if (appStore.activeDocument) {
+            appStore.executeCommandLegacy('invertSelection')
+          }
           break
         default:
           // Emit event for parent component to handle
@@ -568,6 +684,36 @@ export default {
     const togglePanel = (panel) => {
       togglePanelState(panel)
       emit('panel-toggle', panel)
+    }
+
+    // Import/Export Dialog handlers
+    const openExportDialog = () => {
+      if (!appStore.activeDocument) {
+        console.warn('No active document to export')
+        return
+      }
+      importExportMode.value = 'export'
+      showImportExportDialog.value = true
+    }
+
+    const openImportDialog = () => {
+      importExportMode.value = 'import'
+      showImportExportDialog.value = true
+    }
+
+    const handleExportComplete = ({ filename }) => {
+      console.log('Export completed:', filename)
+      currentOperation.value = `Exported: ${filename}`
+    }
+
+    const handleImportComplete = ({ document }) => {
+      console.log('Import completed:', document.name)
+      currentOperation.value = `Imported: ${document.name}`
+    }
+
+    const handleImportExportError = (error) => {
+      console.error('Import/Export error:', error)
+      currentOperation.value = `Error: ${error.message}`
     }
 
     const toggleWireframe = () => {
@@ -644,6 +790,35 @@ export default {
       contextMenu.value.visible = false
     }
 
+    // Delete selected objects
+    const handleDeleteSelected = () => {
+      const selectedNodes = appStore.selectedNodes
+
+      if (selectedNodes.length === 0) {
+        console.log('No objects selected for deletion')
+        return
+      }
+
+      // Confirm deletion
+      const objectCount = selectedNodes.length
+      const objectText = objectCount === 1 ? 'object' : 'objects'
+      if (!confirm(`Are you sure you want to delete ${objectCount} ${objectText}?`)) {
+        return
+      }
+
+      try {
+        // Delete each selected node
+        selectedNodes.forEach((node) => {
+          appStore.deleteNode(node.id)
+        })
+
+        console.log(`Successfully deleted ${objectCount} ${objectText} via keyboard shortcut`)
+      } catch (error) {
+        console.error('Error deleting objects:', error)
+        // You could show a user-friendly error message here
+      }
+    }
+
     // Keyboard shortcuts
     const handleKeydown = (event) => {
       // Ctrl+? or Ctrl+/ - Show keyboard shortcuts help (alternative to F1)
@@ -658,6 +833,16 @@ export default {
         closeAllMenus()
         showKeyboardShortcuts.value = false
         return
+      }
+
+      // Delete key - Delete selected objects
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        // Only handle if no input field is focused
+        if (!event.target.matches('input, textarea, [contenteditable]')) {
+          event.preventDefault()
+          handleDeleteSelected()
+          return
+        }
       }
 
       // Ctrl/Cmd + key combinations
@@ -743,10 +928,6 @@ export default {
             togglePanel('tools')
             event.preventDefault()
             break
-          case 'h':
-            togglePanel('hierarchy')
-            event.preventDefault()
-            break
           case 'f':
             handleMenuAction('zoom-fit')
             event.preventDefault()
@@ -794,6 +975,9 @@ export default {
       currentOperation,
       showKeyboardShortcuts,
       showViewportControls,
+      showMaterialPanel,
+      showImportExportDialog,
+      importExportMode,
       panels,
       contextMenu,
       cursorPosition,
@@ -808,10 +992,16 @@ export default {
       canRedo,
 
       // Methods
+      navigateTo,
       handleMenuAction,
       setActiveTool,
       handleBoxClick,
       togglePanel,
+      openExportDialog,
+      openImportDialog,
+      handleExportComplete,
+      handleImportComplete,
+      handleImportExportError,
       toggleWireframe,
       toggleGrid,
       toggleAxes,
@@ -821,7 +1011,8 @@ export default {
       updatePanSpeed,
       updateZoomSpeed,
       closeAllMenus,
-      startResize
+      startResize,
+      handleDeleteSelected
     }
   }
 }
@@ -969,8 +1160,8 @@ export default {
 }
 
 .tool-button {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   background: none;
   border: 1px solid transparent;
   color: #ffffff;
@@ -980,7 +1171,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 18px;
 }
 
 .tool-button:hover:not(:disabled) {
@@ -989,13 +1180,52 @@ export default {
 }
 
 .tool-button.active {
-  background-color: #007acc;
-  border-color: #007acc;
+  background-color: #3498db;
+  border-color: #3498db;
 }
 
 .tool-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Material Button with Text */
+.material-button {
+  height: 36px;
+  padding: 0 12px;
+  background: none;
+  border: 1px solid transparent;
+  color: #ffffff;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.material-button:hover {
+  background-color: #3e3e42;
+  border-color: #007acc;
+}
+
+.material-button.active {
+  background-color: #3498db;
+  border-color: #3498db;
+  box-shadow: 0 0 8px rgba(52, 152, 219, 0.4);
+}
+
+.material-button .button-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.material-button .button-text {
+  font-size: 13px;
+  letter-spacing: 0.3px;
 }
 
 .toolbar-divider {
@@ -1410,11 +1640,6 @@ export default {
   overflow: hidden;
 }
 
-.hierarchy-panel {
-  min-width: 250px;
-  max-width: 400px;
-}
-
 .floating-panel .panel-header {
   background: var(--header-bg, #3e3e42);
   padding: 8px 12px;
@@ -1453,6 +1678,33 @@ export default {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* Material Panel Floating */
+.floating-material-panel {
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Active state for tool button */
+.tool-button.active {
+  background: #3498db;
+  color: white;
 }
 </style>
 

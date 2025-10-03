@@ -426,20 +426,42 @@ export class CADApplication extends Observable {
   // ==================== History Management ====================
 
   undo() {
+    console.log('CADApplication undo called')
+    console.log('Active document canUndo:', this._activeDocument?.canUndo)
+    console.log('Global history canUndo:', this._globalHistory.canUndo)
+
     if (this._activeDocument && this._activeDocument.canUndo) {
-      return this._activeDocument.undo();
+      console.log('Using document undo')
+      const result = this._activeDocument.undo();
+      console.log('Document undo result:', result)
+      return result;
     } else if (this._globalHistory.canUndo) {
-      return this._globalHistory.undo();
+      console.log('Using global history undo')
+      const result = this._globalHistory.undo();
+      console.log('Global history undo result:', result)
+      return result;
     }
+    console.log('No undo available')
     return false;
   }
 
   redo() {
+    console.log('CADApplication redo called')
+    console.log('Active document canRedo:', this._activeDocument?.canRedo)
+    console.log('Global history canRedo:', this._globalHistory.canRedo)
+
     if (this._activeDocument && this._activeDocument.canRedo) {
-      return this._activeDocument.redo();
+      console.log('Using document redo')
+      const result = this._activeDocument.redo();
+      console.log('Document redo result:', result)
+      return result;
     } else if (this._globalHistory.canRedo) {
-      return this._globalHistory.redo();
+      console.log('Using global history redo')
+      const result = this._globalHistory.redo();
+      console.log('Global history redo result:', result)
+      return result;
     }
+    console.log('No redo available')
     return false;
   }
 

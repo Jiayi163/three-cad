@@ -304,7 +304,7 @@ export default {
             const object3D = await createThreeObjectFromNode(node)
 
             if (object3D) {
-              threeView.value.addVisualObject(node.name || node.id, object3D)
+              threeView.value.addVisualObject(node.id, object3D)
 
               nodeToVisualObjectMap.set(node.id, {
                 node: node,
@@ -332,17 +332,16 @@ export default {
      */
     const handleNodeRemoved = (node) => {
       try {
-        console.log('Removing 3D object for node:', node.name)
-
         const mapping = nodeToVisualObjectMap.get(node.id)
+
         if (mapping && threeView.value) {
-          // Remove from 3D scene
-          threeView.value.removeVisualObject(node.name || node.id)
+          // Remove from 3D scene - use the same ID that was used when adding
+          threeView.value.removeVisualObject(node.id)
 
           // Clean up the mapping
           nodeToVisualObjectMap.delete(node.id)
 
-          console.log('Successfully removed 3D object from scene:', node.name)
+          console.log('Removed 3D object from scene:', node.name)
 
           // Request a render update
           threeView.value.requestRender()

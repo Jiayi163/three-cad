@@ -203,7 +203,33 @@ export default {
           break
         case 'delete':
           console.log('Delete selected objects')
-          // TODO: Implement delete functionality
+          // Call the delete function from application store
+          try {
+            const selectedNodes = appStore.selectedNodes
+            if (selectedNodes.length === 0) {
+              console.log('No objects selected for deletion')
+              return
+            }
+
+            // Confirm deletion
+            const objectCount = selectedNodes.length
+            const objectText = objectCount === 1 ? 'object' : 'objects'
+            if (!confirm(`Are you sure you want to delete ${objectCount} ${objectText}?`)) {
+              console.log('User cancelled deletion')
+              return
+            }
+
+            // Delete each selected node
+            selectedNodes.forEach((node, index) => {
+              console.log(`Deleting node ${index + 1}/${objectCount}:`, node.name, node.id)
+              const result = appStore.deleteNode(node.id)
+              console.log(`Delete result for ${node.name}:`, result)
+            })
+
+            console.log(`Successfully deleted ${objectCount} ${objectText} via menu`)
+          } catch (error) {
+            console.error('Error deleting objects via menu:', error)
+          }
           break
         case 'zoom-fit':
           console.log('Zoom to fit')

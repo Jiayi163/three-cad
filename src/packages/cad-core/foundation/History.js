@@ -176,7 +176,7 @@ export class History extends Observable {
     this._disabled = false
     this._transactionRecords = []
     this._inTransaction = false
-    
+
     // Initialize properties
     this.setProperty('canUndo', false)
     this.setProperty('canRedo', false)
@@ -552,4 +552,4 @@ export class History extends Observable {
     this.clear()
     super.dispose()
   }
-} 
+}

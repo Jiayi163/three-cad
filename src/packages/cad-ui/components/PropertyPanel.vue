@@ -17,8 +17,8 @@
         <div class="property-grid">
           <div class="property-row">
             <label class="property-label">Name:</label>
-            <input 
-              v-model="editableName" 
+            <input
+              v-model="editableName"
               class="property-input"
               @blur="updateNodeProperty('name', editableName)"
               @keyup.enter="updateNodeProperty('name', editableName)"
@@ -52,8 +52,8 @@
             <div class="vector-input">
               <div class="vector-component">
                 <label>X:</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   :value="getTransformValue('position', 'x')"
                   @input="updateTransform('position', 'x', $event.target.value)"
                   step="0.1"
@@ -62,8 +62,8 @@
               </div>
               <div class="vector-component">
                 <label>Y:</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   :value="getTransformValue('position', 'y')"
                   @input="updateTransform('position', 'y', $event.target.value)"
                   step="0.1"
@@ -72,8 +72,8 @@
               </div>
               <div class="vector-component">
                 <label>Z:</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   :value="getTransformValue('position', 'z')"
                   @input="updateTransform('position', 'z', $event.target.value)"
                   step="0.1"
@@ -89,8 +89,8 @@
             <div class="vector-input">
               <div class="vector-component">
                 <label>X:</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   :value="getRotationDegrees('x')"
                   @input="updateRotation('x', $event.target.value)"
                   step="1"
@@ -99,8 +99,8 @@
               </div>
               <div class="vector-component">
                 <label>Y:</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   :value="getRotationDegrees('y')"
                   @input="updateRotation('y', $event.target.value)"
                   step="1"
@@ -109,8 +109,8 @@
               </div>
               <div class="vector-component">
                 <label>Z:</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   :value="getRotationDegrees('z')"
                   @input="updateRotation('z', $event.target.value)"
                   step="1"
@@ -125,9 +125,9 @@
             <label class="group-label">Scale</label>
             <div class="scale-input">
               <div class="uniform-scale">
-                <input 
-                  type="checkbox" 
-                  v-model="uniformScale" 
+                <input
+                  type="checkbox"
+                  v-model="uniformScale"
                   id="uniform-scale"
                   class="checkbox-input"
                 />
@@ -136,8 +136,8 @@
               <div class="vector-input">
                 <div class="vector-component">
                   <label>X:</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     :value="getTransformValue('scale', 'x')"
                     @input="updateScale('x', $event.target.value)"
                     step="0.1"
@@ -147,8 +147,8 @@
                 </div>
                 <div class="vector-component">
                   <label>Y:</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     :value="getTransformValue('scale', 'y')"
                     @input="updateScale('y', $event.target.value)"
                     step="0.1"
@@ -159,8 +159,8 @@
                 </div>
                 <div class="vector-component">
                   <label>Z:</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     :value="getTransformValue('scale', 'z')"
                     @input="updateScale('z', $event.target.value)"
                     step="0.1"
@@ -181,31 +181,31 @@
           <span class="section-title">Geometry</span>
         </div>
         <div class="property-grid">
-          <div 
-            v-for="(value, key) in geometryProperties" 
-            :key="key" 
+          <div
+            v-for="(value, key) in geometryProperties"
+            :key="key"
             class="property-row"
           >
             <label class="property-label">{{ formatPropertyName(key) }}:</label>
-            <input 
+            <input
               v-if="typeof value === 'number'"
-              type="number" 
+              type="number"
               :value="value"
               @input="updateGeometryProperty(key, $event.target.value)"
               step="0.1"
               min="0.001"
               class="number-input"
             />
-            <input 
+            <input
               v-else-if="typeof value === 'string'"
-              type="text" 
+              type="text"
               :value="value"
               @input="updateGeometryProperty(key, $event.target.value)"
               class="property-input"
             />
-            <input 
+            <input
               v-else-if="typeof value === 'boolean'"
-              type="checkbox" 
+              type="checkbox"
               :checked="value"
               @change="updateGeometryProperty(key, $event.target.checked)"
               class="checkbox-input"
@@ -221,29 +221,20 @@
           <span class="section-title">Material</span>
           <button class="section-action" @click="resetMaterial" title="Reset Material">↺</button>
         </div>
+
+        <!-- Material Selector -->
+        <MaterialSelector
+          :visual-object="selectedVisualObject"
+          @material-applied="onMaterialApplied"
+        />
+
+        <!-- Basic Material Properties -->
         <div class="property-grid">
-          <div class="property-row">
-            <label class="property-label">Color:</label>
-            <div class="color-input">
-              <input 
-                type="color" 
-                :value="materialColor"
-                @input="updateMaterialProperty('color', $event.target.value)"
-                class="color-picker"
-              />
-              <input 
-                type="text" 
-                :value="materialColor"
-                @input="updateMaterialProperty('color', $event.target.value)"
-                class="color-text"
-              />
-            </div>
-          </div>
           <div class="property-row">
             <label class="property-label">Opacity:</label>
             <div class="range-input">
-              <input 
-                type="range" 
+              <input
+                type="range"
                 :value="materialOpacity * 100"
                 @input="updateMaterialProperty('opacity', $event.target.value / 100)"
                 min="0"
@@ -255,8 +246,8 @@
           </div>
           <div class="property-row">
             <label class="property-label">Wireframe:</label>
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               :checked="materialWireframe"
               @change="updateMaterialProperty('wireframe', $event.target.checked)"
               class="checkbox-input"
@@ -273,8 +264,8 @@
         <div class="property-grid">
           <div class="property-row">
             <label class="property-label">Visible:</label>
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               :checked="nodeVisible"
               @change="updateNodeProperty('visible', $event.target.checked)"
               class="checkbox-input"
@@ -282,8 +273,8 @@
           </div>
           <div class="property-row">
             <label class="property-label">Locked:</label>
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               :checked="nodeLocked"
               @change="updateNodeProperty('locked', $event.target.checked)"
               class="checkbox-input"
@@ -299,24 +290,24 @@
           <button class="section-action" @click="addCustomProperty" title="Add Property">+</button>
         </div>
         <div class="property-grid">
-          <div 
-            v-for="(prop, index) in customProperties" 
+          <div
+            v-for="(prop, index) in customProperties"
             :key="index"
             class="property-row custom-property"
           >
-            <input 
+            <input
               v-model="prop.name"
               @blur="updateCustomProperty(index)"
               placeholder="Property name"
               class="property-input small"
             />
-            <input 
+            <input
               v-model="prop.value"
               @blur="updateCustomProperty(index)"
               placeholder="Value"
               class="property-input small"
             />
-            <button 
+            <button
               @click="removeCustomProperty(index)"
               class="remove-button"
               title="Remove Property"
@@ -332,13 +323,17 @@
 
 <script>
 import { ref, computed, watch } from 'vue'
+import MaterialSelector from './MaterialSelector.vue'
 import { useApplicationStore } from '@/stores/application'
 
 export default {
   name: 'PropertyPanel',
+  components: {
+    MaterialSelector
+  },
   setup() {
     const appStore = useApplicationStore()
-    
+
     // State
     const editableName = ref('')
     const uniformScale = ref(true)
@@ -349,9 +344,27 @@ export default {
       return appStore.activeDocument?.selectedNodes?.[0] || null
     })
 
+    const selectedVisualObject = computed(() => {
+      if (!selectedNode.value) return null
+
+      // Try to get visual object from node
+      const visualObject = selectedNode.value.getProperty('visualObject')
+      if (visualObject) {
+        return visualObject
+      }
+
+      // If no direct visual object, try to get from ThreeView
+      const threeView = appStore.threeView
+      if (threeView && selectedNode.value.id) {
+        return threeView.getVisualObjectInstance(selectedNode.value.id)
+      }
+
+      return null
+    })
+
     const geometryProperties = computed(() => {
       if (!selectedNode.value) return null
-      
+
       // Get geometry properties from node
       const props = selectedNode.value.getProperty('geometry') || {}
       return Object.keys(props).length > 0 ? props : null
@@ -394,7 +407,7 @@ export default {
     // Methods
     const updateNodeProperty = (property, value) => {
       if (!selectedNode.value) return
-      
+
       try {
         selectedNode.value.setProperty(property, value)
         console.log(`Updated ${property} to:`, value)
@@ -405,7 +418,7 @@ export default {
 
     const getTransformValue = (type, axis) => {
       if (!selectedNode.value) return 0
-      
+
       const transform = selectedNode.value.getProperty('transform') || {}
       const values = transform[type] || { x: type === 'scale' ? 1 : 0, y: type === 'scale' ? 1 : 0, z: type === 'scale' ? 1 : 0 }
       return values[axis] || (type === 'scale' ? 1 : 0)
@@ -413,14 +426,14 @@ export default {
 
     const updateTransform = (type, axis, value) => {
       if (!selectedNode.value) return
-      
+
       const numValue = parseFloat(value) || (type === 'scale' ? 1 : 0)
       const transform = selectedNode.value.getProperty('transform') || {}
-      
+
       if (!transform[type]) {
         transform[type] = { x: type === 'scale' ? 1 : 0, y: type === 'scale' ? 1 : 0, z: type === 'scale' ? 1 : 0 }
       }
-      
+
       transform[type][axis] = numValue
       updateNodeProperty('transform', transform)
     }
@@ -437,7 +450,7 @@ export default {
 
     const updateScale = (axis, value) => {
       const numValue = Math.max(0.001, parseFloat(value) || 1)
-      
+
       if (uniformScale.value) {
         updateTransform('scale', 'x', numValue)
         updateTransform('scale', 'y', numValue)
@@ -458,23 +471,23 @@ export default {
 
     const updateGeometryProperty = (property, value) => {
       if (!selectedNode.value) return
-      
+
       const geometry = selectedNode.value.getProperty('geometry') || {}
-      
+
       // Convert value type
       if (typeof geometry[property] === 'number') {
         value = parseFloat(value) || 0
       } else if (typeof geometry[property] === 'boolean') {
         value = Boolean(value)
       }
-      
+
       geometry[property] = value
       updateNodeProperty('geometry', geometry)
     }
 
     const updateMaterialProperty = (property, value) => {
       if (!selectedNode.value) return
-      
+
       const material = selectedNode.value.getProperty('material') || {}
       material[property] = value
       updateNodeProperty('material', material)
@@ -489,9 +502,15 @@ export default {
       updateNodeProperty('material', defaultMaterial)
     }
 
+    const onMaterialApplied = (materialInfo) => {
+      console.log('Material applied:', materialInfo)
+      // Additional processing logic can be added here
+      // Such as updating UI state, recording history, etc.
+    }
+
     const loadCustomProperties = () => {
       if (!selectedNode.value) return
-      
+
       const custom = selectedNode.value.getProperty('custom') || {}
       customProperties.value = Object.entries(custom).map(([name, value]) => ({
         name,
@@ -514,14 +533,14 @@ export default {
 
     const updateCustomProperties = () => {
       if (!selectedNode.value) return
-      
+
       const custom = {}
       customProperties.value.forEach(prop => {
         if (prop.name.trim()) {
           custom[prop.name.trim()] = prop.value
         }
       })
-      
+
       updateNodeProperty('custom', custom)
     }
 
@@ -539,16 +558,17 @@ export default {
       editableName,
       uniformScale,
       customProperties,
-      
+
       // Computed properties
       selectedNode,
+      selectedVisualObject,
       geometryProperties,
       materialColor,
       materialOpacity,
       materialWireframe,
       nodeVisible,
       nodeLocked,
-      
+
       // Methods
       updateNodeProperty,
       getTransformValue,
@@ -560,6 +580,7 @@ export default {
       updateGeometryProperty,
       updateMaterialProperty,
       resetMaterial,
+      onMaterialApplied,
       addCustomProperty,
       removeCustomProperty,
       updateCustomProperty,
