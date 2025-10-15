@@ -308,6 +308,12 @@ export class BoxCommand extends GeometryCommand {
         }
       )
 
+      // Check if user cancelled the operation
+      if (params && params.cancelled) {
+        console.log('Box creation cancelled by user')
+        return CommandResult.cancelled('Box creation cancelled by user')
+      }
+
       if (this.isCancelled) {
         return CommandResult.error('Box creation cancelled by user')
       }

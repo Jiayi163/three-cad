@@ -1388,7 +1388,7 @@ export class InteractiveInput extends Observable {
 
       const handleCancel = () => {
         this._removeInputDialog()
-        reject(new Error('User cancelled object creation'))
+        resolve({ cancelled: true, message: 'User cancelled object creation' })
       }
 
       okButton.addEventListener('click', handleOK)
@@ -1758,10 +1758,16 @@ export class InteractiveInput extends Observable {
   _getDimensionsFromDialog(dialog) {
     const dimensionsTab = dialog.querySelector('.tab-content')
     const inputs = dimensionsTab._inputs
+
+    if (!inputs || !inputs.x || !inputs.y || !inputs.z) {
+      console.warn('Dimensions inputs not found, using defaults')
+      return { x: 1, y: 1, z: 1 }
+    }
+
     return {
-      x: parseFloat(inputs.x.value) || 0,
-      y: parseFloat(inputs.y.value) || 0,
-      z: parseFloat(inputs.z.value) || 0
+      x: parseFloat(inputs.x.value) || 1,
+      y: parseFloat(inputs.y.value) || 1,
+      z: parseFloat(inputs.z.value) || 1
     }
   }
 
@@ -1773,6 +1779,12 @@ export class InteractiveInput extends Observable {
     const tabs = dialog.querySelectorAll('.tab-content')
     const positionTab = tabs[1] // Position is second tab
     const inputs = positionTab._inputs
+
+    if (!inputs || !inputs.x || !inputs.y || !inputs.z) {
+      console.warn('Position inputs not found, using defaults')
+      return { x: 0, y: 0, z: 0 }
+    }
+
     return {
       x: parseFloat(inputs.x.value) || 0,
       y: parseFloat(inputs.y.value) || 0,

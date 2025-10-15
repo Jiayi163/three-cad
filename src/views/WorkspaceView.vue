@@ -363,8 +363,13 @@ export default {
             break
         }
       } catch (error) {
-        console.error(`Failed to start interactive command for tool ${tool}:`, error)
-        console.log(`Tool selected: ${tool} - Command execution failed`)
+        // Check if this is a user cancellation
+        if (error.message === 'User cancelled object creation') {
+          console.log(`Tool selected: ${tool} - Command cancelled by user`)
+        } else {
+          console.error(`Failed to start interactive command for tool ${tool}:`, error)
+          console.log(`Tool selected: ${tool} - Command execution failed`)
+        }
       }
     }
 

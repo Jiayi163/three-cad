@@ -312,5 +312,9 @@ export class CommandResult {
   static error(message, data = null) {
     return new CommandResult(false, data, message)
   }
+
+  static cancelled(message = 'Command cancelled by user') {
+    return new CommandResult(false, null, message)
+  }
 }
 

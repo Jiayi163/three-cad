@@ -406,26 +406,49 @@ export class SphereCommand extends GeometryCommand {
         }
       )
 
+      // Check if user cancelled the operation
+      if (params && params.cancelled) {
+        console.log('Sphere creation cancelled by user')
+        return CommandResult.cancelled('Sphere creation cancelled by user')
+      }
+
       if (this.isCancelled) {
         return CommandResult.error('Sphere creation cancelled by user')
       }
 
       // Set the radius (use x value for radius)
-      this.setRadius(params.dimensions.x)
+      if (params.dimensions && params.dimensions.x !== undefined) {
+        this.setRadius(params.dimensions.x)
+      } else {
+        console.warn('Dimensions not found, using default radius')
+        this.setRadius(1.0)
+      }
 
       // Set the position
-      this.setPosition(params.position.x, params.position.y, params.position.z)
+      if (params.position && params.position.x !== undefined) {
+        this.setPosition(params.position.x, params.position.y, params.position.z)
+      } else {
+        console.warn('Position not found, using default position')
+        this.setPosition(0, 0, 0)
+      }
 
       // Set the material properties
-      this.setMaterial(
-        params.material.color,
-        params.material.opacity,
-        params.material.wireframe
-      )
+      if (params.material) {
+        this.setMaterial(
+          params.material.color || '#607D8B',
+          params.material.opacity || 1.0,
+          params.material.wireframe || false
+        )
 
-      // Store additional material properties
-      this.metalness = params.material.metalness
-      this.roughness = params.material.roughness
+        // Store additional material properties
+        this.metalness = params.material.metalness || 0.0
+        this.roughness = params.material.roughness || 0.5
+      } else {
+        console.warn('Material not found, using defaults')
+        this.setMaterial('#607D8B', 1.0, false)
+        this.metalness = 0.0
+        this.roughness = 0.5
+      }
 
       // Temporarily disable dimension input to avoid recursion
       this.useDimensionInput = false
@@ -439,6 +462,11 @@ export class SphereCommand extends GeometryCommand {
       return result
 
     } catch (error) {
+      // Check if this is a user cancellation
+      if (error.message === 'User cancelled object creation') {
+        console.log('Sphere creation cancelled by user')
+        return CommandResult.cancelled('Sphere creation cancelled by user')
+      }
       console.error('SphereCommand dimension input failed:', error)
       throw error
     }
