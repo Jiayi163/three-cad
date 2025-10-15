@@ -215,13 +215,15 @@
 
     <div class="material-actions">
       <button
-        @click="applyMaterial"
-        :disabled="!hasSelection"
+        type="button"
+        @click.stop.prevent="applyMaterial"
+        :disabled="!canApplyMaterial"
         class="apply-button"
+        :title="canApplyMaterial ? 'Apply selected material to object' : (!hasVisualObject ? 'No object selected' : 'No material selected')"
       >
         Apply Material
       </button>
-      <button @click="resetMaterial" class="reset-button">
+      <button type="button" @click.stop.prevent="resetMaterial" class="reset-button">
         Reset
       </button>
     </div>
@@ -279,7 +281,14 @@ export default {
       );
     },
     hasSelection() {
-      return this.selectedMaterialId || this.currentTexture;
+      return !!(this.selectedMaterialId || this.currentTexture);
+    },
+    hasVisualObject() {
+      return !!this.visualObject;
+    },
+    canApplyMaterial() {
+      // Can apply when we have both a visual object AND a material/texture selected
+      return this.hasVisualObject && this.hasSelection;
     }
   },
   watch: {
@@ -337,20 +346,50 @@ export default {
       img.src = this.texturePreviewUrl;
     },
 
-    async applyMaterial() {
+    async applyMaterial(event) {
+      // Stop event propagation to prevent any interference
+      if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+
+      console.log('=== Apply Material Button Clicked ===');
+      console.log('Visual Object:', this.visualObject);
+      console.log('Selected Material ID:', this.selectedMaterialId);
+      console.log('Current Texture:', this.currentTexture);
+      console.log('Can Apply:', this.canApplyMaterial);
+
       if (!this.visualObject) {
-        console.warn('No visual object selected for material application');
+        console.error('❌ No visual object selected');
+        alert('Please select an object first');
+        return;
+      }
+
+      if (!this.selectedMaterialId && !this.currentTexture) {
+        console.error('❌ No material or texture selected');
+        alert('Please select a material or upload a texture first');
         return;
       }
 
       try {
+        // Save current transform before applying material
+        const savedPosition = this.visualObject._object3D ? this.visualObject._object3D.position.clone() : null;
+        const savedRotation = this.visualObject._object3D ? this.visualObject._object3D.rotation.clone() : null;
+        const savedScale = this.visualObject._object3D ? this.visualObject._object3D.scale.clone() : null;
+
+        console.log('💾 Saved transforms before material application:');
+        console.log('  Position:', savedPosition);
+        console.log('  Rotation:', savedRotation);
+        console.log('  Scale:', savedScale);
+
         if (this.selectedMaterialId) {
           // Apply preset material
-          console.log('Applying preset material:', this.selectedMaterialId);
+          console.log('✅ Applying preset material:', this.selectedMaterialId);
           await this.visualObject.setMaterial(this.selectedMaterialId);
+          console.log('✅ Preset material applied successfully');
         } else if (this.currentTexture) {
           // Apply texture material
-          console.log('Applying texture material from file:', this.currentTexture.name);
+          console.log('✅ Applying texture material from file:', this.currentTexture.name);
           const options = {
             repeatX: this.textureSettings.repeatX,
             repeatY: this.textureSettings.repeatY,
@@ -362,12 +401,27 @@ export default {
           };
 
           await this.visualObject.setTextureFromFile(this.currentTexture, options);
-        } else {
-          console.warn('No material or texture selected');
-          return;
+          console.log('✅ Texture material applied successfully');
         }
 
-        console.log('Material applied successfully');
+        // Restore transforms after material application (in case they were affected)
+        if (this.visualObject._object3D && savedPosition && savedRotation && savedScale) {
+          this.visualObject._object3D.position.copy(savedPosition);
+          this.visualObject._object3D.rotation.copy(savedRotation);
+          this.visualObject._object3D.scale.copy(savedScale);
+
+          console.log('🔄 Restored transforms after material application:');
+          console.log('  Position:', this.visualObject._object3D.position);
+          console.log('  Rotation:', this.visualObject._object3D.rotation);
+          console.log('  Scale:', this.visualObject._object3D.scale);
+        }
+
+        // Force render update
+        if (this.visualObject._object3D) {
+          this.visualObject._object3D.needsUpdate = true;
+        }
+
+        console.log('✅ Material application complete');
         this.$emit('material-applied', {
           type: this.selectedMaterialId ? 'preset' : 'texture',
           materialId: this.selectedMaterialId,
@@ -375,7 +429,8 @@ export default {
         });
 
       } catch (error) {
-        console.error('Failed to apply material:', error);
+        console.error('❌ Failed to apply material:', error);
+        console.error('Error stack:', error.stack);
         alert('Failed to apply material: ' + error.message);
       }
     },
@@ -428,6 +483,9 @@ export default {
   border-radius: 8px;
   max-height: 600px;
   overflow-y: auto;
+  position: relative;
+  z-index: 1;
+  pointer-events: auto; /* Ensure all elements inside can receive clicks */
 }
 
 .material-selector-header {
@@ -686,6 +744,9 @@ export default {
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s ease;
+  pointer-events: auto; /* Ensure button receives clicks */
+  position: relative;
+  z-index: 10; /* Ensure button is above any overlays */
 }
 
 .apply-button {
@@ -695,12 +756,20 @@ export default {
 
 .apply-button:hover:not(:disabled) {
   background: var(--cad-accent-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.apply-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 .apply-button:disabled {
   background: var(--cad-bg-disabled);
   color: var(--cad-text-disabled);
   cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .reset-button {

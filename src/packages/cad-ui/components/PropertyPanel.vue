@@ -323,6 +323,7 @@
 
 <script>
 import { ref, computed, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import MaterialSelector from './MaterialSelector.vue'
 import { useApplicationStore } from '@/stores/application'
 
@@ -333,6 +334,7 @@ export default {
   },
   setup() {
     const appStore = useApplicationStore()
+    const { activeDocument } = storeToRefs(appStore)
 
     // State
     const editableName = ref('')
@@ -341,75 +343,138 @@ export default {
 
     // Computed properties
     const selectedNode = computed(() => {
-      return appStore.activeDocument?.selectedNodes?.[0] || null
+      console.log('PropertyPanel - Computing selectedNode...')
+      console.log('PropertyPanel - activeDocument.value:', activeDocument.value)
+
+      const doc = activeDocument.value
+      if (!doc) {
+        console.log('PropertyPanel - No active document')
+        return null
+      }
+
+      const selectedNodes = doc.selectedNodes
+      console.log('PropertyPanel - selectedNodes:', selectedNodes)
+      console.log('PropertyPanel - selectedNodes type:', typeof selectedNodes)
+      console.log('PropertyPanel - selectedNodes length:', selectedNodes?.length)
+      console.log('PropertyPanel - selectedNodes items:', selectedNodes?.items)
+
+      if (!selectedNodes || selectedNodes.length === 0) {
+        console.log('PropertyPanel - No selected nodes (length is 0 or null)')
+        return null
+      }
+
+      // Get the first selected node
+      const node = selectedNodes.items?.[0] || null
+      console.log('PropertyPanel - First selected node:', node)
+      if (node) {
+        console.log('PropertyPanel - Node id:', node.id)
+        console.log('PropertyPanel - Node name:', node.name)
+        console.log('PropertyPanel - Node type:', node.type)
+        console.log('PropertyPanel - Node keys:', Object.keys(node))
+      }
+
+      return node
     })
 
     const selectedVisualObject = computed(() => {
-      if (!selectedNode.value) return null
+      if (!selectedNode.value) {
+        console.log('PropertyPanel - No selected node')
+        return null
+      }
+
+      console.log('PropertyPanel - selectedNode.value:', selectedNode.value)
+      console.log('PropertyPanel - selectedNode.value.visualObject:', selectedNode.value.visualObject)
 
       // Try to get visual object from node
-      const visualObject = selectedNode.value.getProperty('visualObject')
+      const visualObject = selectedNode.value.visualObject
+      console.log('PropertyPanel - visualObject from node:', visualObject)
       if (visualObject) {
+        console.log('PropertyPanel - Found visual object:', visualObject)
+        console.log('PropertyPanel - visualObject properties:', Object.keys(visualObject))
+        console.log('PropertyPanel - visualObject width:', visualObject.width)
+        console.log('PropertyPanel - visualObject height:', visualObject.height)
+        console.log('PropertyPanel - visualObject _position:', visualObject._position)
         return visualObject
       }
 
       // If no direct visual object, try to get from ThreeView
-      const threeView = appStore.threeView
+      const threeView = window.__THREESCENE_INSTANCE__
       if (threeView && selectedNode.value.id) {
-        return threeView.getVisualObjectInstance(selectedNode.value.id)
+        const vo = threeView.getVisualObjectInstance(selectedNode.value.id)
+        console.log('PropertyPanel - Found visual object from ThreeView:', vo)
+        return vo
       }
 
+      console.log('PropertyPanel - No visual object found')
       return null
     })
 
     const geometryProperties = computed(() => {
-      if (!selectedNode.value) return null
+      if (!selectedVisualObject.value) return null
 
-      // Get geometry properties from node
-      const props = selectedNode.value.getProperty('geometry') || {}
+      // Get geometry properties from VisualObject
+      const props = {}
+
+      // Get basic geometry properties
+      if (selectedVisualObject.value.width !== undefined) props.width = selectedVisualObject.value.width
+      if (selectedVisualObject.value.height !== undefined) props.height = selectedVisualObject.value.height
+      if (selectedVisualObject.value.depth !== undefined) props.depth = selectedVisualObject.value.depth
+      if (selectedVisualObject.value.radius !== undefined) props.radius = selectedVisualObject.value.radius
+      if (selectedVisualObject.value.radiusTop !== undefined) props.radiusTop = selectedVisualObject.value.radiusTop
+      if (selectedVisualObject.value.radiusBottom !== undefined) props.radiusBottom = selectedVisualObject.value.radiusBottom
+
+      // Get calculated properties
+      if (selectedVisualObject.value.volume !== undefined) props.volume = selectedVisualObject.value.volume
+      if (selectedVisualObject.value.area !== undefined) props.area = selectedVisualObject.value.area
+      if (selectedVisualObject.value.surfaceArea !== undefined) props.surfaceArea = selectedVisualObject.value.surfaceArea
+      if (selectedVisualObject.value.circumference !== undefined) props.circumference = selectedVisualObject.value.circumference
+
       return Object.keys(props).length > 0 ? props : null
     })
 
     const materialColor = computed(() => {
-      const material = selectedNode.value?.getProperty('material') || {}
-      return material.color || '#ffffff'
+      if (!selectedVisualObject.value) return '#ffffff'
+
+      // Get color from VisualObject material config
+      const materialConfig = selectedVisualObject.value._materialConfig?.default
+      if (materialConfig && materialConfig.color !== undefined) {
+        // Convert hex to CSS color
+        return `#${materialConfig.color.toString(16).padStart(6, '0')}`
+      }
+
+      return '#ffffff'
     })
 
     const materialOpacity = computed(() => {
-      const material = selectedNode.value?.getProperty('material') || {}
-      return material.opacity ?? 1.0
+      if (!selectedVisualObject.value) return 1.0
+      return selectedVisualObject.value._opacity ?? 1.0
     })
 
     const materialWireframe = computed(() => {
-      const material = selectedNode.value?.getProperty('material') || {}
-      return material.wireframe || false
+      if (!selectedVisualObject.value) return false
+
+      // Get wireframe from VisualObject material config
+      const materialConfig = selectedVisualObject.value._materialConfig?.default
+      return materialConfig?.wireframe || false
     })
 
     const nodeVisible = computed(() => {
-      return selectedNode.value?.getProperty('visible') ?? true
+      // Node is a plain object, access properties directly
+      return selectedNode.value?.visible ?? true
     })
 
     const nodeLocked = computed(() => {
-      return selectedNode.value?.getProperty('locked') ?? false
+      // Node is a plain object, access properties directly
+      return selectedNode.value?.locked ?? false
     })
-
-    // Watch selected node changes
-    watch(selectedNode, (newNode) => {
-      if (newNode) {
-        editableName.value = newNode.name || ''
-        loadCustomProperties()
-      } else {
-        editableName.value = ''
-        customProperties.value = []
-      }
-    }, { immediate: true })
 
     // Methods
     const updateNodeProperty = (property, value) => {
       if (!selectedNode.value) return
 
       try {
-        selectedNode.value.setProperty(property, value)
+        // Node is a plain object, so update properties directly
+        selectedNode.value[property] = value
         console.log(`Updated ${property} to:`, value)
       } catch (error) {
         console.error(`Failed to update property ${property}:`, error)
@@ -417,25 +482,65 @@ export default {
     }
 
     const getTransformValue = (type, axis) => {
-      if (!selectedNode.value) return 0
+      if (!selectedVisualObject.value) return 0
 
-      const transform = selectedNode.value.getProperty('transform') || {}
-      const values = transform[type] || { x: type === 'scale' ? 1 : 0, y: type === 'scale' ? 1 : 0, z: type === 'scale' ? 1 : 0 }
-      return values[axis] || (type === 'scale' ? 1 : 0)
+      switch (type) {
+        case 'position':
+          return selectedVisualObject.value._position[axis] || 0
+        case 'rotation':
+          return selectedVisualObject.value._rotation[axis] || 0
+        case 'scale':
+          return selectedVisualObject.value._scale[axis] || (axis === 'x' || axis === 'y' || axis === 'z' ? 1 : 0)
+        default:
+          return 0
+      }
     }
 
     const updateTransform = (type, axis, value) => {
-      if (!selectedNode.value) return
+      if (!selectedVisualObject.value) return
 
       const numValue = parseFloat(value) || (type === 'scale' ? 1 : 0)
-      const transform = selectedNode.value.getProperty('transform') || {}
 
-      if (!transform[type]) {
-        transform[type] = { x: type === 'scale' ? 1 : 0, y: type === 'scale' ? 1 : 0, z: type === 'scale' ? 1 : 0 }
+      console.log(`🔧 Updating ${type}.${axis} to ${numValue}`)
+
+      switch (type) {
+        case 'position': {
+          // Update the position directly on the Three.js object
+          if (selectedVisualObject.value._object3D) {
+            selectedVisualObject.value._object3D.position[axis] = numValue
+            // Also update the internal position
+            selectedVisualObject.value._position[axis] = numValue
+            // Trigger property change
+            selectedVisualObject.value.setProperty('position', selectedVisualObject.value._position.clone())
+            console.log(`✅ Position updated:`, selectedVisualObject.value._object3D.position)
+          }
+          break
+        }
+        case 'rotation': {
+          // Update the rotation directly on the Three.js object
+          if (selectedVisualObject.value._object3D) {
+            selectedVisualObject.value._object3D.rotation[axis] = numValue
+            // Also update the internal rotation
+            selectedVisualObject.value._rotation[axis] = numValue
+            // Trigger property change
+            selectedVisualObject.value.setProperty('rotation', selectedVisualObject.value._rotation.clone())
+            console.log(`✅ Rotation updated:`, selectedVisualObject.value._object3D.rotation)
+          }
+          break
+        }
+        case 'scale': {
+          // Update the scale directly on the Three.js object
+          if (selectedVisualObject.value._object3D) {
+            selectedVisualObject.value._object3D.scale[axis] = numValue
+            // Also update the internal scale
+            selectedVisualObject.value._scale[axis] = numValue
+            // Trigger property change
+            selectedVisualObject.value.setProperty('scale', selectedVisualObject.value._scale.clone())
+            console.log(`✅ Scale updated:`, selectedVisualObject.value._object3D.scale)
+          }
+          break
+        }
       }
-
-      transform[type][axis] = numValue
-      updateNodeProperty('transform', transform)
     }
 
     const getRotationDegrees = (axis) => {
@@ -461,45 +566,97 @@ export default {
     }
 
     const resetTransform = () => {
-      const defaultTransform = {
-        position: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 },
-        scale: { x: 1, y: 1, z: 1 }
+      if (!selectedVisualObject.value) return
+
+      try {
+        // Reset position using setter
+        selectedVisualObject.value.position = { x: 0, y: 0, z: 0 }
+
+        // Reset rotation using setter
+        selectedVisualObject.value.rotation = { x: 0, y: 0, z: 0 }
+
+        // Reset scale using setter
+        selectedVisualObject.value.scale = { x: 1, y: 1, z: 1 }
+
+        console.log('Transform reset to defaults')
+      } catch (error) {
+        console.error('Failed to reset transform:', error)
       }
-      updateNodeProperty('transform', defaultTransform)
     }
 
     const updateGeometryProperty = (property, value) => {
-      if (!selectedNode.value) return
+      if (!selectedVisualObject.value) return
 
-      const geometry = selectedNode.value.getProperty('geometry') || {}
+      try {
+        // Convert value type
+        const currentValue = selectedVisualObject.value[property]
+        if (typeof currentValue === 'number') {
+          value = parseFloat(value) || 0
+        } else if (typeof currentValue === 'boolean') {
+          value = Boolean(value)
+        }
 
-      // Convert value type
-      if (typeof geometry[property] === 'number') {
-        value = parseFloat(value) || 0
-      } else if (typeof geometry[property] === 'boolean') {
-        value = Boolean(value)
+        // Update the property on the VisualObject
+        selectedVisualObject.value[property] = value
+
+        // Recreate the geometry if it's a geometry property
+        if (selectedVisualObject.value.recreateGeometry) {
+          selectedVisualObject.value.recreateGeometry()
+        }
+
+        console.log(`Updated geometry property ${property} to:`, value)
+      } catch (error) {
+        console.error(`Failed to update geometry property ${property}:`, error)
       }
-
-      geometry[property] = value
-      updateNodeProperty('geometry', geometry)
     }
 
     const updateMaterialProperty = (property, value) => {
-      if (!selectedNode.value) return
+      if (!selectedVisualObject.value) return
 
-      const material = selectedNode.value.getProperty('material') || {}
-      material[property] = value
-      updateNodeProperty('material', material)
+      try {
+        // Update the material config in VisualObject
+        if (!selectedVisualObject.value._materialConfig.default) {
+          selectedVisualObject.value._materialConfig.default = {}
+        }
+
+        selectedVisualObject.value._materialConfig.default[property] = value
+
+        // Update opacity separately as it's stored in _opacity
+        if (property === 'opacity') {
+          selectedVisualObject.value._opacity = value
+        }
+
+        // Apply the material changes
+        selectedVisualObject.value.updateMaterial()
+
+        console.log(`Updated material ${property} to:`, value)
+      } catch (error) {
+        console.error(`Failed to update material property ${property}:`, error)
+      }
     }
 
     const resetMaterial = () => {
-      const defaultMaterial = {
-        color: '#ffffff',
-        opacity: 1.0,
-        wireframe: false
+      if (!selectedVisualObject.value) return
+
+      try {
+        // Reset to default material config
+        selectedVisualObject.value._materialConfig.default = {
+          color: 0xffffff,
+          opacity: 1.0,
+          wireframe: false,
+          metalness: 0.1,
+          roughness: 0.3
+        }
+
+        selectedVisualObject.value._opacity = 1.0
+
+        // Apply the material changes
+        selectedVisualObject.value.updateMaterial()
+
+        console.log('Material reset to defaults')
+      } catch (error) {
+        console.error('Failed to reset material:', error)
       }
-      updateNodeProperty('material', defaultMaterial)
     }
 
     const onMaterialApplied = (materialInfo) => {
@@ -511,7 +668,8 @@ export default {
     const loadCustomProperties = () => {
       if (!selectedNode.value) return
 
-      const custom = selectedNode.value.getProperty('custom') || {}
+      // Node is a plain object, not an Observable, so access properties directly
+      const custom = selectedNode.value.properties?.custom || selectedNode.value.custom || {}
       customProperties.value = Object.entries(custom).map(([name, value]) => ({
         name,
         value: String(value)
@@ -522,12 +680,26 @@ export default {
       customProperties.value.push({ name: '', value: '' })
     }
 
+    // Watch selected node changes (must be after loadCustomProperties is defined)
+    watch(selectedNode, (newNode) => {
+      console.log('PropertyPanel - selectedNode changed:', newNode)
+      if (newNode) {
+        editableName.value = newNode.name || ''
+        loadCustomProperties()
+        console.log('PropertyPanel - Set editable name to:', editableName.value)
+      } else {
+        editableName.value = ''
+        customProperties.value = []
+        console.log('PropertyPanel - Cleared editable name')
+      }
+    }, { immediate: true })
+
     const removeCustomProperty = (index) => {
       customProperties.value.splice(index, 1)
       updateCustomProperties()
     }
 
-    const updateCustomProperty = (index) => {
+    const updateCustomProperty = () => {
       updateCustomProperties()
     }
 
@@ -596,6 +768,9 @@ export default {
   height: 100%;
   overflow-y: auto;
   font-size: 12px;
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
 }
 
 .no-selection {

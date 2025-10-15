@@ -7,6 +7,8 @@ import { markRaw } from 'vue'
 import { Observable } from '../cad-core/foundation/Observable.js'
 import { CameraController } from './CameraController.js'
 import { VisualObject } from './VisualObject.js'
+import { ViewCube } from './ViewCube.js'
+import { SelectionOverlay } from './SelectionOverlay.js'
 
 export class ThreeView extends Observable {
   constructor(document, name = 'default') {
@@ -23,6 +25,7 @@ export class ThreeView extends Observable {
     this.camera = null
     this.renderer = null
     this.cameraController = null
+    this.viewCube = null
 
     // Rendering
     this.needsRender = true
@@ -34,6 +37,10 @@ export class ThreeView extends Observable {
     this.mouse = markRaw(new THREE.Vector2())
     this.selectedObjects = new Set()
     this.hoveredObject = null
+
+    // Layers for selective raycasting
+    this.LAYER_INTERACTIVE = 0      // Real selectable objects
+    this.LAYER_NON_INTERACTIVE = 1  // Helpers, grid, axes, gizmos
 
     // Selection system integration
     this.selectionManager = null
@@ -76,15 +83,30 @@ export class ThreeView extends Observable {
       this.scene = markRaw(new THREE.Scene())
       this.scene.background = this.settings.backgroundColor
 
-      // Create camera - use markRaw to prevent Vue reactivity
-      this.camera = markRaw(new THREE.PerspectiveCamera(
+      // Create camera - keep a raw reference for ViewCube
+      const cameraObject = new THREE.PerspectiveCamera(
         75, // FOV
         1,  // Aspect ratio (will be updated when DOM element is set)
         0.1, // Near plane
         1000 // Far plane
-      ))
-      this.camera.position.set(5, 5, 5)
-      this.camera.lookAt(0, 0, 0)
+      )
+      cameraObject.position.set(5, 5, 5)
+
+      // CRITICAL: Set up-vector explicitly for consistent XYZ orientation
+      cameraObject.up.set(0, 1, 0)
+      cameraObject.lookAt(0, 0, 0)
+      cameraObject.updateProjectionMatrix()
+      cameraObject.updateMatrixWorld(true) // Force matrix update to finalize quaternion
+
+      // Enable camera to see both interactive and non-interactive layers
+      // This allows rendering helpers while raycaster only checks interactive objects
+      cameraObject.layers.enableAll()
+
+      // Store raw camera for ViewCube to avoid proxy issues
+      this.rawCamera = cameraObject
+
+      // Use markRaw for Vue reactivity prevention
+      this.camera = markRaw(cameraObject)
 
       // Create renderer - use markRaw to prevent Vue reactivity
       this.renderer = markRaw(new THREE.WebGLRenderer({
@@ -150,13 +172,26 @@ export class ThreeView extends Observable {
   _setupHelpers() {
     if (this.settings.showGrid) {
       const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x333333)
+      // Make grid non-interactive (not selectable, no raycasting)
+      gridHelper.layers.set(this.LAYER_NON_INTERACTIVE)
+      gridHelper.raycast = () => {} // Completely disable raycasting
       this.helpers.add(gridHelper)
     }
 
     if (this.settings.showAxes) {
       const axesHelper = new THREE.AxesHelper(5)
+      // Make axes non-interactive (not selectable, no raycasting)
+      axesHelper.layers.set(this.LAYER_NON_INTERACTIVE)
+      axesHelper.raycast = () => {} // Completely disable raycasting
       this.helpers.add(axesHelper)
     }
+
+    // Make the entire helpers group non-interactive
+    this.helpers.layers.set(this.LAYER_NON_INTERACTIVE)
+    this.helpers.traverse((child) => {
+      child.layers.set(this.LAYER_NON_INTERACTIVE)
+      child.raycast = () => {} // Disable raycasting on all helper children
+    })
   }
 
   /**
@@ -176,6 +211,42 @@ export class ThreeView extends Observable {
   }
 
   /**
+   * Initialize the view cube overlay
+   */
+  _initializeViewCube() {
+    if (!this.element || !this.rawCamera || !this.scene) return
+
+    try {
+      // Make sure container has position: relative
+      const computedStyle = window.getComputedStyle(this.element)
+      if (computedStyle.position === 'static') {
+        this.element.style.position = 'relative'
+      }
+
+      // Create ViewCube with main camera and scene for perfect 1:1 mirroring
+      this.viewCube = new ViewCube({
+        container: this.element,
+        mainCamera: this.rawCamera,
+        mainScene: this.scene,
+        size: 120,
+        margin: 12
+      })
+
+      console.log('ViewCube initialized in ThreeView (1:1 mirror mode)')
+    } catch (error) {
+      console.error('Failed to initialize ViewCube:', error)
+    }
+  }
+
+  /**
+   * Update the view cube scene clone
+   * No longer needed - ViewCube renders main scene directly
+   */
+  _updateViewCubeScene() {
+    // No-op - kept for API compatibility
+  }
+
+  /**
    * Attach this view to a DOM element
    * @param {HTMLElement} element - DOM element to attach to
    */
@@ -186,6 +257,12 @@ export class ThreeView extends Observable {
     if (this.element && this.renderer) {
       this.element.removeChild(this.renderer.domElement)
       this._removeEventListeners()
+
+      // Clean up view cube
+      if (this.viewCube) {
+        this.viewCube.dispose()
+        this.viewCube = null
+      }
     }
 
     this.element = element
@@ -199,6 +276,10 @@ export class ThreeView extends Observable {
 
       // Setup DOM event listeners
       this._addEventListeners()
+
+      // Initialize ViewCube (two-pass mini mirror)
+      // No complex orientation sync needed - it just renders the same scene/camera
+      this._initializeViewCube()
 
       // Start render loop
       this._startRenderLoop()
@@ -265,13 +346,8 @@ export class ThreeView extends Observable {
   _onMouseMove(event) {
     this._updateMousePosition(event)
 
-    // Update hover
-    const intersections = this._raycastFromMouse()
-    const newHovered = intersections.length > 0 ? intersections[0].object : null
-
-    if (this.hoveredObject !== newHovered) {
-      this._setHoveredObject(newHovered)
-    }
+    // NO HOVER EFFECTS - removed hover highlighting
+    // Selection is click-based only and persists until deselected
 
     // Notify camera controller
     if (this.cameraController) {
@@ -336,6 +412,11 @@ export class ThreeView extends Observable {
    */
   _onResize() {
     this._updateSize()
+
+    // Update view cube on resize
+    if (this.viewCube) {
+      this.viewCube.onResize()
+    }
   }
 
   /**
@@ -351,12 +432,25 @@ export class ThreeView extends Observable {
 
   /**
    * Perform raycasting from mouse position
+   * Only checks INTERACTIVE layer (excludes helpers, grid, axes, gizmos)
    */
   _raycastFromMouse() {
     if (!this.camera || !this.scene) return []
 
+    // Configure raycaster to only check interactive layer
+    this.raycaster.layers.set(this.LAYER_INTERACTIVE)
     this.raycaster.setFromCamera(this.mouse, this.camera)
-    return this.raycaster.intersectObjects(this.scene.children, true)
+
+    // Get all intersections, but filter to only mesh objects (not helpers)
+    const intersections = this.raycaster.intersectObjects(this.scene.children, true)
+
+    // Filter to only real mesh objects that are on interactive layer
+    return intersections.filter(hit => {
+      return hit.object &&
+             hit.object.isMesh &&
+             hit.object.layers.test(this.raycaster.layers) &&
+             !hit.object.userData.isSelectionOverlay // Don't select the overlay itself
+    })
   }
 
   /**
@@ -376,22 +470,11 @@ export class ThreeView extends Observable {
   }
 
   /**
-   * Set hovered object
+   * Set hovered object (DISABLED - no hover effects)
    */
   _setHoveredObject(object) {
-    // Clear previous hover
-    if (this.hoveredObject) {
-      this._setObjectHover(this.hoveredObject, false)
-    }
-
-    this.hoveredObject = object
-
-    // Set new hover
-    if (object) {
-      this._setObjectHover(object, true)
-    }
-
-    this.needsRender = true
+    // NO-OP: Hover effects are disabled
+    // Selection is persistent and click-based only
   }
 
   /**
@@ -453,26 +536,24 @@ export class ThreeView extends Observable {
    * Set object selection state
    */
   _setObjectSelected(object, selected) {
-    if (object.material) {
-      if (selected) {
-        object.material.color.setHex(0xff4444)  // Red for selection
-      } else {
-        object.material.color.setHex(0x666666)  // Default gray
-      }
+    if (selected) {
+      // Apply red outline overlay
+      SelectionOverlay.applySelection(object, false)
+    } else {
+      // Remove outline overlay
+      SelectionOverlay.clearSelection(object)
     }
+
+    // Update ViewCube to show selection state
+    this._updateViewCubeScene()
   }
 
   /**
-   * Set object hover state
+   * Set object hover state (DISABLED - no hover effects)
    */
   _setObjectHover(object, hovered) {
-    if (object.material && !this.selectedObjects.has(object)) {
-      if (hovered) {
-        object.material.color.setHex(0x4444ff)  // Blue for hover
-      } else {
-        object.material.color.setHex(0x666666)  // Default gray
-      }
-    }
+    // NO-OP: Hover effects are completely disabled
+    // Only selection (click-based) shows overlays
   }
 
   /**
@@ -657,7 +738,16 @@ export class ThreeView extends Observable {
     try {
       // Ensure camera matrix is updated
       this.camera.updateMatrixWorld()
+
+      // Render main scene to full viewport
       this.renderer.render(this.scene, this.camera)
+
+      // Render mini viewport (ViewCube)
+      // ViewCube has its own renderer and canvas, but uses the same camera and scene
+      // This creates a perfect 1:1 mirror that zooms/pans/orbits identically
+      if (this.viewCube) {
+        this.viewCube.render()
+      }
     } catch (error) {
       console.error('Render error:', error)
       this.setProperty('error', error.message)
@@ -704,6 +794,16 @@ export class ThreeView extends Observable {
       rawObject.userData.nodeId = nodeId
       rawObject.userData.visualObject = visualObject
 
+      // Make object interactive (selectable) by putting it on the interactive layer
+      rawObject.layers.set(this.LAYER_INTERACTIVE)
+      // Ensure all children are also on interactive layer
+      rawObject.traverse((child) => {
+        // Don't change overlay layers (they inherit from parent anyway)
+        if (!child.userData.isSelectionOverlay) {
+          child.layers.set(this.LAYER_INTERACTIVE)
+        }
+      })
+
       // Store both the VisualObject instance and Three.js object
       this.visualObjectInstances.set(nodeId, visualObject)
       this.visualObjects.set(nodeId, rawObject)
@@ -714,6 +814,9 @@ export class ThreeView extends Observable {
 
       // Set up property change listeners
       this._setupVisualObjectListeners(visualObject)
+
+      // Update view cube scene clone
+      this._updateViewCubeScene()
 
       return rawObject
     } catch (error) {
@@ -733,9 +836,22 @@ export class ThreeView extends Observable {
     // Mark the object as raw to prevent Vue reactivity
     const rawObject = markRaw(object3D)
     rawObject.userData.nodeId = nodeId
+    rawObject.userData.visualObject = true // Mark as visualObject for ViewCube cloning
+
+    // Make object interactive (selectable)
+    rawObject.layers.set(this.LAYER_INTERACTIVE)
+    rawObject.traverse((child) => {
+      if (!child.userData.isSelectionOverlay) {
+        child.layers.set(this.LAYER_INTERACTIVE)
+      }
+    })
+
     this.visualObjects.set(nodeId, rawObject)
     this.scene.add(rawObject)
     this.requestRender()
+
+    // Update view cube scene clone
+    this._updateViewCubeScene()
   }
 
   /**
@@ -765,6 +881,9 @@ export class ThreeView extends Observable {
     }
 
     this.requestRender()
+
+    // Update view cube scene clone
+    this._updateViewCubeScene()
   }
 
   /**
@@ -784,6 +903,9 @@ export class ThreeView extends Observable {
       this.visualObjects.delete(nodeId)
       this.selectedObjects.delete(object3D)
       this.requestRender()
+
+      // Update view cube scene clone
+      this._updateViewCubeScene()
     }
   }
 
@@ -804,6 +926,12 @@ export class ThreeView extends Observable {
       }
 
       this._removeEventListeners()
+
+      // Dispose view cube
+      if (this.viewCube) {
+        this.viewCube.dispose()
+        this.viewCube = null
+      }
 
       if (this.renderer) {
         this.renderer.dispose()

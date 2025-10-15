@@ -176,7 +176,7 @@ export class GeometryFactory {
         const p = this._normalizeParams('box', params);
 
         return this._getOrCreateGeometry('box', p, () => {
-            return new THREE.BoxGeometry(
+            const geometry = new THREE.BoxGeometry(
                 p.width,
                 p.height,
                 p.depth,
@@ -184,6 +184,8 @@ export class GeometryFactory {
                 p.heightSegments,
                 p.depthSegments
             );
+            geometry.userData.type = 'box';
+            return geometry;
         });
     }
 
@@ -203,7 +205,7 @@ export class GeometryFactory {
         const p = this._normalizeParams('sphere', params);
 
         return this._getOrCreateGeometry('sphere', p, () => {
-            return new THREE.SphereGeometry(
+            const geometry = new THREE.SphereGeometry(
                 p.radius,
                 p.widthSegments,
                 p.heightSegments,
@@ -212,6 +214,8 @@ export class GeometryFactory {
                 p.thetaStart,
                 p.thetaLength
             );
+            geometry.userData.type = 'sphere';
+            return geometry;
         });
     }
 
@@ -232,7 +236,7 @@ export class GeometryFactory {
         const p = this._normalizeParams('cylinder', params);
 
         return this._getOrCreateGeometry('cylinder', p, () => {
-            return new THREE.CylinderGeometry(
+            const geometry = new THREE.CylinderGeometry(
                 p.radiusTop,
                 p.radiusBottom,
                 p.height,
@@ -242,6 +246,8 @@ export class GeometryFactory {
                 p.thetaStart,
                 p.thetaLength
             );
+            geometry.userData.type = 'cylinder';
+            return geometry;
         });
     }
 
@@ -309,13 +315,15 @@ export class GeometryFactory {
         const p = this._normalizeParams('torus', params);
 
         return this._getOrCreateGeometry('torus', p, () => {
-            return new THREE.TorusGeometry(
+            const geometry = new THREE.TorusGeometry(
                 p.radius,
                 p.tube,
                 p.radialSegments,
                 p.tubularSegments,
                 p.arc
             );
+            geometry.userData.type = 'torus';
+            return geometry;
         });
     }
 

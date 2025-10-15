@@ -1026,17 +1026,27 @@ export const useApplicationStore = defineStore('application', () => {
   function syncSelectionState() {
     const document = activeDocument.value
     if (!document) {
+      console.log('Store syncSelectionState: No active document')
       selectedNodeIds.value = []
       selectedCount.value = 0
       return
     }
 
+    console.log('Store syncSelectionState: Syncing selection state')
+    console.log('Store syncSelectionState: document.selectedNodes:', document.selectedNodes)
+    console.log('Store syncSelectionState: document.selectedNodes.length:', document.selectedNodes.length)
+    console.log('Store syncSelectionState: document.selectedNodes.items:', document.selectedNodes.items)
+
     const previousCount = selectedCount.value
     selectedNodeIds.value = document.selectedNodes.items.map(node => node.id)
     selectedCount.value = document.selectedNodes.length
 
+    console.log('Store syncSelectionState: Updated selectedCount to:', selectedCount.value)
+    console.log('Store syncSelectionState: Updated selectedNodeIds to:', selectedNodeIds.value)
+
     // Emit selection change event if count changed
     if (selectedCount.value !== previousCount) {
+      console.log('Store syncSelectionState: Selection count changed, emitting event')
       emitSelectionChange()
     }
   }
@@ -1050,6 +1060,7 @@ export const useApplicationStore = defineStore('application', () => {
     cadApplication.value.onPropertyChanged('activeDocument', () => {
       syncDocumentState()
       syncSelectionState()
+      setupDocumentListeners()
     })
 
     cadApplication.value.onPropertyChanged('activeView', () => {
@@ -1072,6 +1083,33 @@ export const useApplicationStore = defineStore('application', () => {
     // Listen to view collection changes
     cadApplication.value.views.onCollectionChanged(() => {
       syncViewState()
+    })
+
+    // Set up initial document listeners
+    setupDocumentListeners()
+  }
+
+  function setupDocumentListeners() {
+    const document = activeDocument.value
+    if (!document) return
+
+    // Listen to selection changes in the document
+    if (document.selectedNodes) {
+      document.selectedNodes.onCollectionChanged(() => {
+        console.log('Store: Selection changed in document')
+        syncSelectionState()
+      })
+    }
+
+    // Listen to node selection property changes
+    document.onPropertyChanged('nodeSelected', () => {
+      console.log('Store: Node selected in document')
+      syncSelectionState()
+    })
+
+    document.onPropertyChanged('nodeDeselected', () => {
+      console.log('Store: Node deselected in document')
+      syncSelectionState()
     })
   }
 

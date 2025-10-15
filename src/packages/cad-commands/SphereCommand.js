@@ -369,31 +369,63 @@ export class SphereCommand extends GeometryCommand {
   }
 
   /**
-   * Execute command with dimension input dialogs
+   * Execute command with enhanced input dialog (dimensions, position, material)
    * @returns {Promise<CommandResult>}
    */
   async executeWithDimensionInput() {
     try {
-      console.log('Creating sphere with dimension input...')
+      console.log('Creating sphere with enhanced input dialog...')
 
       // Initialize interactive input
       const InteractiveInput = (await import('../cad-core/command/InteractiveInput.js')).InteractiveInput
       const interactiveInput = new InteractiveInput(this.application)
 
-      // Get radius using custom dialog
-      const radius = await interactiveInput.getSingleDimension(
-        'Create Sphere - Enter Radius',
-        'Radius',
-        this.radius,
-        { min: 0.1, max: 50 }
+      // Get enhanced object parameters (dimensions, position, material)
+      const params = await interactiveInput.getEnhancedObjectParameters(
+        'Create Sphere - Enhanced Settings',
+        {
+          dimensions: {
+            defaults: { x: this.radius || 1, y: this.radius || 1, z: this.radius || 1 },
+            labels: { x: 'Radius', y: 'Radius', z: 'Radius' },
+            constraints: { min: 0.1, max: 50 }
+          },
+          position: {
+            defaults: { x: 0, y: 0, z: 0 },
+            labels: { x: 'Position X', y: 'Position Y', z: 'Position Z' },
+            constraints: { min: -1000, max: 1000 }
+          },
+          material: {
+            defaults: {
+              color: this.color || '#4CAF50',
+              opacity: this.opacity || 1.0,
+              wireframe: this.wireframe || false,
+              metalness: this.metalness || 0.1,
+              roughness: this.roughness || 0.3
+            }
+          }
+        }
       )
 
       if (this.isCancelled) {
         return CommandResult.error('Sphere creation cancelled by user')
       }
 
-      // Set the radius
-      this.setRadius(radius)
+      // Set the radius (use x value for radius)
+      this.setRadius(params.dimensions.x)
+
+      // Set the position
+      this.setPosition(params.position.x, params.position.y, params.position.z)
+
+      // Set the material properties
+      this.setMaterial(
+        params.material.color,
+        params.material.opacity,
+        params.material.wireframe
+      )
+
+      // Store additional material properties
+      this.metalness = params.material.metalness
+      this.roughness = params.material.roughness
 
       // Temporarily disable dimension input to avoid recursion
       this.useDimensionInput = false

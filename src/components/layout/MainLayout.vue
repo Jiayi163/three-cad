@@ -57,8 +57,8 @@
       </div>
       <div class="menu-bar-right">
         <div class="status-info">
-          <span class="status-indicator" :class="{ active: appStore.isReady }"></span>
-          <span class="status-text">{{ appStore.isReady ? 'Ready' : 'Loading...' }}</span>
+          <span class="status-indicator" :class="{ active: appStore.isInitialized && !appStore.isLoading }"></span>
+          <span class="status-text">{{ appStore.isInitialized && !appStore.isLoading ? 'Ready' : 'Loading...' }}</span>
         </div>
       </div>
     </div>
@@ -267,6 +267,16 @@
             <span class="button-text">Materials</span>
           </button>
 
+          <Tooltip content="Toggle Properties Panel" shortcut="P">
+            <button
+              class="cad-button tool-button"
+              :class="{ active: panels.right.visible }"
+              @click="togglePanel('right')"
+            >
+              <i class="cad-icon">📋</i>
+            </button>
+          </Tooltip>
+
           <div class="toolbar-divider"></div>
 
           <button class="tool-button" @click="handleMenuAction('zoom-fit')" title="Zoom to Fit">
@@ -421,7 +431,7 @@
         ></div>
         <div class="panel-header">
           <span class="panel-title">{{ panels.right.title }}</span>
-          <button class="panel-close" @click="panels.right.visible = false">×</button>
+          <button class="panel-close" @click="togglePanel('right')">×</button>
         </div>
         <div class="panel-content">
           <component :is="panels.right.component" v-if="panels.right.component" />
@@ -657,6 +667,13 @@ export default {
           if (appStore.activeDocument) {
             appStore.executeCommandLegacy('invertSelection')
           }
+          break
+        case 'properties':
+          // Open the property panel if it's closed
+          if (!panelState.value.right.visible) {
+            togglePanel('right')
+          }
+          console.log('Properties panel opened')
           break
         default:
           // Emit event for parent component to handle

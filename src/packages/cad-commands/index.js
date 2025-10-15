@@ -17,6 +17,7 @@ import { CircleCommand } from './CircleCommand.js'
 import { RotateCommand } from './RotateCommand.js'
 import { MoveCommand } from './MoveCommand.js'
 import { ScaleCommand } from './ScaleCommand.js'
+import { MirrorCommand } from './MirrorCommand.js'
 
 // Export individual commands
 export { BoxCommand } from './BoxCommand.js'
@@ -30,6 +31,7 @@ export { CircleCommand } from './CircleCommand.js'
 export { RotateCommand } from './RotateCommand.js'
 export { MoveCommand } from './MoveCommand.js'
 export { ScaleCommand } from './ScaleCommand.js'
+export { MirrorCommand } from './MirrorCommand.js'
 
 /**
  * Registry of all available commands with their metadata
@@ -316,6 +318,35 @@ export const COMMAND_REGISTRY = {
           type: 'boolean',
           default: false,
           description: 'Enable interactive scale mode'
+        }
+      }
+    }
+  },
+
+  'mirror-objects': {
+    CommandClass: MirrorCommand,
+    metadata: {
+      name: 'Mirror Objects',
+      description: 'Mirror selected objects across a specified axis or plane',
+      category: 'Transform',
+      icon: '🪞',
+      shortcut: 'I',
+      parameters: {
+        axis: {
+          type: 'string',
+          default: 'x',
+          options: ['x', 'y', 'z', 'custom'],
+          description: 'Mirror axis (X, Y, Z, or custom plane)'
+        },
+        createCopy: {
+          type: 'boolean',
+          default: false,
+          description: 'Create mirrored copy instead of modifying original'
+        },
+        center: {
+          type: 'object',
+          default: { x: 0, y: 0, z: 0 },
+          description: 'Mirror center point'
         }
       }
     }

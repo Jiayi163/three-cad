@@ -1175,4 +1175,625 @@ export class InteractiveInput extends Observable {
       }
     })
   }
+
+  /**
+   * Get enhanced object creation parameters including dimensions, position, and material
+   * @param {string} title - Dialog title
+   * @param {Object} options - Configuration options
+   * @returns {Promise<Object>} Object with dimensions, position, and material properties
+   */
+  async getEnhancedObjectParameters(title, options = {}) {
+    return new Promise((resolve, reject) => {
+      // Remove any existing dialog
+      this._removeInputDialog()
+
+      // Default options
+      const config = {
+        dimensions: {
+          defaults: { x: 2, y: 2, z: 2 },
+          labels: { x: 'Width (X)', y: 'Height (Y)', z: 'Depth (Z)' },
+          constraints: { min: 0.1, max: 100 }
+        },
+        position: {
+          defaults: { x: 0, y: 0, z: 0 },
+          labels: { x: 'Position X', y: 'Position Y', z: 'Position Z' },
+          constraints: { min: -1000, max: 1000 }
+        },
+        material: {
+          defaults: {
+            color: '#4CAF50',
+            opacity: 1.0,
+            wireframe: false,
+            metalness: 0.1,
+            roughness: 0.3
+          }
+        },
+        ...options
+      }
+
+      // Create dialog container
+      const dialog = document.createElement('div')
+      dialog.id = 'cad-input-dialog'
+      dialog.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #2c3e50;
+        border: 2px solid #3498db;
+        border-radius: 8px;
+        padding: 25px;
+        z-index: 10000;
+        color: white;
+        font-family: Arial, sans-serif;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        min-width: 400px;
+        max-width: 500px;
+        max-height: 80vh;
+        overflow-y: auto;
+      `
+
+      // Create title
+      const titleElement = document.createElement('h3')
+      titleElement.textContent = title
+      titleElement.style.cssText = 'margin: 0 0 20px 0; color: #ecf0f1; text-align: center;'
+
+      // Create tabs container
+      const tabsContainer = document.createElement('div')
+      tabsContainer.style.cssText = 'margin-bottom: 20px;'
+
+      const tabs = document.createElement('div')
+      tabs.style.cssText = 'display: flex; border-bottom: 2px solid #3498db; margin-bottom: 20px;'
+
+      const tabButtons = ['Dimensions', 'Position', 'Material']
+      const tabContents = []
+      let activeTab = 0
+
+      // Create tab buttons
+      tabButtons.forEach((tabName, index) => {
+        const tabButton = document.createElement('button')
+        tabButton.textContent = tabName
+        tabButton.style.cssText = `
+          background: ${index === 0 ? '#3498db' : 'transparent'};
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          cursor: pointer;
+          font-size: 14px;
+          border-radius: 4px 4px 0 0;
+          transition: background-color 0.3s;
+        `
+
+        tabButton.addEventListener('click', () => {
+          // Update active tab
+          activeTab = index
+          tabButtons.forEach((_, i) => {
+            const btn = tabs.children[i]
+            btn.style.background = i === index ? '#3498db' : 'transparent'
+          })
+
+          // Show/hide tab contents
+          tabContents.forEach((content, i) => {
+            content.style.display = i === index ? 'block' : 'none'
+          })
+        })
+
+        tabs.appendChild(tabButton)
+      })
+
+      // Create tab contents
+      const contentContainer = document.createElement('div')
+      contentContainer.style.cssText = 'min-height: 200px;'
+
+      // Dimensions tab
+      const dimensionsContent = this._createDimensionsTab(config.dimensions)
+      dimensionsContent.style.display = 'block'
+      tabContents.push(dimensionsContent)
+
+      // Position tab
+      const positionContent = this._createPositionTab(config.position)
+      positionContent.style.display = 'none'
+      tabContents.push(positionContent)
+
+      // Material tab
+      const materialContent = this._createMaterialTab(config.material)
+      materialContent.style.display = 'none'
+      tabContents.push(materialContent)
+
+      // Add tab contents to container
+      tabContents.forEach(content => contentContainer.appendChild(content))
+
+      // Create button container
+      const buttonContainer = document.createElement('div')
+      buttonContainer.style.cssText = 'display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;'
+
+      // Create OK button
+      const okButton = document.createElement('button')
+      okButton.textContent = 'Create Object'
+      okButton.style.cssText = `
+        background: #27ae60;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        transition: background-color 0.3s;
+      `
+
+      okButton.addEventListener('mouseenter', () => {
+        okButton.style.backgroundColor = '#229954'
+      })
+
+      okButton.addEventListener('mouseleave', () => {
+        okButton.style.backgroundColor = '#27ae60'
+      })
+
+      // Create Cancel button
+      const cancelButton = document.createElement('button')
+      cancelButton.textContent = 'Cancel'
+      cancelButton.style.cssText = `
+        background: #e74c3c;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.3s;
+      `
+
+      cancelButton.addEventListener('mouseenter', () => {
+        cancelButton.style.backgroundColor = '#c0392b'
+      })
+
+      cancelButton.addEventListener('mouseleave', () => {
+        cancelButton.style.backgroundColor = '#e74c3c'
+      })
+
+      // Assemble dialog
+      dialog.appendChild(titleElement)
+      dialog.appendChild(tabs)
+      dialog.appendChild(contentContainer)
+      buttonContainer.appendChild(cancelButton)
+      buttonContainer.appendChild(okButton)
+      dialog.appendChild(buttonContainer)
+
+      // Add to document
+      document.body.appendChild(dialog)
+
+      // Focus first input
+      const firstInput = dialog.querySelector('input[type="number"]')
+      if (firstInput) {
+        firstInput.focus()
+        firstInput.select()
+      }
+
+      // Event handlers
+      const handleOK = () => {
+        try {
+          const result = {
+            dimensions: this._getDimensionsFromDialog(dialog),
+            position: this._getPositionFromDialog(dialog),
+            material: this._getMaterialFromDialog(dialog)
+          }
+          this._removeInputDialog()
+          resolve(result)
+        } catch (error) {
+          console.error('Error getting enhanced object parameters:', error)
+          reject(error)
+        }
+      }
+
+      const handleCancel = () => {
+        this._removeInputDialog()
+        reject(new Error('User cancelled object creation'))
+      }
+
+      okButton.addEventListener('click', handleOK)
+      cancelButton.addEventListener('click', handleCancel)
+
+      // Handle Enter key
+      const handleKeyDown = (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          handleOK()
+        } else if (event.key === 'Escape') {
+          event.preventDefault()
+          handleCancel()
+        }
+      }
+
+      document.addEventListener('keydown', handleKeyDown)
+
+      // Cleanup on dialog removal
+      const originalRemove = this._removeInputDialog.bind(this)
+      this._removeInputDialog = () => {
+        document.removeEventListener('keydown', handleKeyDown)
+        originalRemove()
+        this._removeInputDialog = originalRemove
+      }
+    })
+  }
+
+  /**
+   * Create dimensions tab content
+   * @private
+   */
+  _createDimensionsTab(config) {
+    const container = document.createElement('div')
+    container.className = 'tab-content'
+
+    // Ensure config has proper defaults
+    const safeConfig = {
+      defaults: config.defaults || { x: 2, y: 2, z: 2 },
+      labels: config.labels || { x: 'Width (X)', y: 'Height (Y)', z: 'Depth (Z)' },
+      constraints: config.constraints || { min: 0.1, max: 100 }
+    }
+
+    const inputs = {}
+    const inputConfigs = [
+      { key: 'x', label: safeConfig.labels.x, default: safeConfig.defaults.x, constraints: safeConfig.constraints },
+      { key: 'y', label: safeConfig.labels.y, default: safeConfig.defaults.y, constraints: safeConfig.constraints },
+      { key: 'z', label: safeConfig.labels.z, default: safeConfig.defaults.z, constraints: safeConfig.constraints }
+    ]
+
+    inputConfigs.forEach(inputConfig => {
+      // Label
+      const label = document.createElement('label')
+      label.textContent = inputConfig.label + ':'
+      label.style.cssText = `
+        display: block;
+        margin-bottom: 5px;
+        color: #bdc3c7;
+        font-size: 14px;
+        font-weight: bold;
+      `
+
+      // Input
+      const input = document.createElement('input')
+      input.type = 'number'
+      input.value = inputConfig.default
+      input.step = 0.1
+      input.min = inputConfig.constraints.min
+      input.max = inputConfig.constraints.max
+      input.style.cssText = `
+        width: 100%;
+        padding: 10px;
+        border: 2px solid #3498db;
+        border-radius: 4px;
+        background: #34495e;
+        color: #ecf0f1;
+        font-size: 16px;
+        margin-bottom: 15px;
+        outline: none;
+        box-sizing: border-box;
+      `
+
+      input.addEventListener('focus', () => {
+        input.style.borderColor = '#5dade2'
+      })
+
+      input.addEventListener('blur', () => {
+        input.style.borderColor = '#3498db'
+      })
+
+      inputs[inputConfig.key] = input
+      container.appendChild(label)
+      container.appendChild(input)
+    })
+
+    // Store inputs for later retrieval
+    container._inputs = inputs
+    return container
+  }
+
+  /**
+   * Create position tab content
+   * @private
+   */
+  _createPositionTab(config) {
+    const container = document.createElement('div')
+    container.className = 'tab-content'
+
+    // Ensure config has proper defaults
+    const safeConfig = {
+      defaults: config.defaults || { x: 0, y: 0, z: 0 },
+      labels: config.labels || { x: 'Position X', y: 'Position Y', z: 'Position Z' },
+      constraints: config.constraints || { min: -1000, max: 1000 }
+    }
+
+    const inputs = {}
+    const inputConfigs = [
+      { key: 'x', label: safeConfig.labels.x, default: safeConfig.defaults.x, constraints: safeConfig.constraints },
+      { key: 'y', label: safeConfig.labels.y, default: safeConfig.defaults.y, constraints: safeConfig.constraints },
+      { key: 'z', label: safeConfig.labels.z, default: safeConfig.defaults.z, constraints: safeConfig.constraints }
+    ]
+
+    inputConfigs.forEach(inputConfig => {
+      // Label
+      const label = document.createElement('label')
+      label.textContent = inputConfig.label + ':'
+      label.style.cssText = `
+        display: block;
+        margin-bottom: 5px;
+        color: #bdc3c7;
+        font-size: 14px;
+        font-weight: bold;
+      `
+
+      // Input
+      const input = document.createElement('input')
+      input.type = 'number'
+      input.value = inputConfig.default
+      input.step = 0.1
+      input.min = inputConfig.constraints.min
+      input.max = inputConfig.constraints.max
+      input.style.cssText = `
+        width: 100%;
+        padding: 10px;
+        border: 2px solid #3498db;
+        border-radius: 4px;
+        background: #34495e;
+        color: #ecf0f1;
+        font-size: 16px;
+        margin-bottom: 15px;
+        outline: none;
+        box-sizing: border-box;
+      `
+
+      input.addEventListener('focus', () => {
+        input.style.borderColor = '#5dade2'
+      })
+
+      input.addEventListener('blur', () => {
+        input.style.borderColor = '#3498db'
+      })
+
+      inputs[inputConfig.key] = input
+      container.appendChild(label)
+      container.appendChild(input)
+    })
+
+    // Store inputs for later retrieval
+    container._inputs = inputs
+    return container
+  }
+
+  /**
+   * Create material tab content
+   * @private
+   */
+  _createMaterialTab(config) {
+    const container = document.createElement('div')
+    container.className = 'tab-content'
+
+    // Ensure config has proper defaults
+    const safeConfig = {
+      defaults: {
+        color: config.defaults?.color || '#4CAF50',
+        opacity: config.defaults?.opacity || 1.0,
+        wireframe: config.defaults?.wireframe || false,
+        metalness: config.defaults?.metalness || 0.1,
+        roughness: config.defaults?.roughness || 0.3
+      }
+    }
+
+    // Color picker
+    const colorLabel = document.createElement('label')
+    colorLabel.textContent = 'Color:'
+    colorLabel.style.cssText = `
+      display: block;
+      margin-bottom: 5px;
+      color: #bdc3c7;
+      font-size: 14px;
+      font-weight: bold;
+    `
+
+    const colorInput = document.createElement('input')
+    colorInput.type = 'color'
+    colorInput.value = safeConfig.defaults.color
+    colorInput.style.cssText = `
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #3498db;
+      border-radius: 4px;
+      background: #34495e;
+      margin-bottom: 15px;
+      outline: none;
+      box-sizing: border-box;
+      height: 50px;
+    `
+
+    // Opacity slider
+    const opacityLabel = document.createElement('label')
+    opacityLabel.textContent = 'Opacity:'
+    opacityLabel.style.cssText = `
+      display: block;
+      margin-bottom: 5px;
+      color: #bdc3c7;
+      font-size: 14px;
+      font-weight: bold;
+    `
+
+    const opacityContainer = document.createElement('div')
+    opacityContainer.style.cssText = 'display: flex; align-items: center; gap: 10px; margin-bottom: 15px;'
+
+    const opacitySlider = document.createElement('input')
+    opacitySlider.type = 'range'
+    opacitySlider.min = '0'
+    opacitySlider.max = '1'
+    opacitySlider.step = '0.01'
+    opacitySlider.value = safeConfig.defaults.opacity
+    opacitySlider.style.cssText = 'flex: 1;'
+
+    const opacityValue = document.createElement('span')
+    opacityValue.textContent = Math.round(safeConfig.defaults.opacity * 100) + '%'
+    opacityValue.style.cssText = 'color: #ecf0f1; font-weight: bold; min-width: 40px;'
+
+    opacitySlider.addEventListener('input', () => {
+      opacityValue.textContent = Math.round(opacitySlider.value * 100) + '%'
+    })
+
+    opacityContainer.appendChild(opacitySlider)
+    opacityContainer.appendChild(opacityValue)
+
+    // Wireframe checkbox
+    const wireframeLabel = document.createElement('label')
+    wireframeLabel.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+      color: #bdc3c7;
+      font-size: 14px;
+      cursor: pointer;
+    `
+
+    const wireframeCheckbox = document.createElement('input')
+    wireframeCheckbox.type = 'checkbox'
+    wireframeCheckbox.checked = safeConfig.defaults.wireframe
+    wireframeCheckbox.style.cssText = 'transform: scale(1.2);'
+
+    const wireframeText = document.createElement('span')
+    wireframeText.textContent = 'Wireframe Mode'
+
+    wireframeLabel.appendChild(wireframeCheckbox)
+    wireframeLabel.appendChild(wireframeText)
+
+    // Metalness slider
+    const metalnessLabel = document.createElement('label')
+    metalnessLabel.textContent = 'Metalness:'
+    metalnessLabel.style.cssText = `
+      display: block;
+      margin-bottom: 5px;
+      color: #bdc3c7;
+      font-size: 14px;
+      font-weight: bold;
+    `
+
+    const metalnessContainer = document.createElement('div')
+    metalnessContainer.style.cssText = 'display: flex; align-items: center; gap: 10px; margin-bottom: 15px;'
+
+    const metalnessSlider = document.createElement('input')
+    metalnessSlider.type = 'range'
+    metalnessSlider.min = '0'
+    metalnessSlider.max = '1'
+    metalnessSlider.step = '0.01'
+    metalnessSlider.value = safeConfig.defaults.metalness
+    metalnessSlider.style.cssText = 'flex: 1;'
+
+    const metalnessValue = document.createElement('span')
+    metalnessValue.textContent = Math.round(safeConfig.defaults.metalness * 100) + '%'
+    metalnessValue.style.cssText = 'color: #ecf0f1; font-weight: bold; min-width: 40px;'
+
+    metalnessSlider.addEventListener('input', () => {
+      metalnessValue.textContent = Math.round(metalnessSlider.value * 100) + '%'
+    })
+
+    metalnessContainer.appendChild(metalnessSlider)
+    metalnessContainer.appendChild(metalnessValue)
+
+    // Roughness slider
+    const roughnessLabel = document.createElement('label')
+    roughnessLabel.textContent = 'Roughness:'
+    roughnessLabel.style.cssText = `
+      display: block;
+      margin-bottom: 5px;
+      color: #bdc3c7;
+      font-size: 14px;
+      font-weight: bold;
+    `
+
+    const roughnessContainer = document.createElement('div')
+    roughnessContainer.style.cssText = 'display: flex; align-items: center; gap: 10px; margin-bottom: 15px;'
+
+    const roughnessSlider = document.createElement('input')
+    roughnessSlider.type = 'range'
+    roughnessSlider.min = '0'
+    roughnessSlider.max = '1'
+    roughnessSlider.step = '0.01'
+    roughnessSlider.value = safeConfig.defaults.roughness
+    roughnessSlider.style.cssText = 'flex: 1;'
+
+    const roughnessValue = document.createElement('span')
+    roughnessValue.textContent = Math.round(safeConfig.defaults.roughness * 100) + '%'
+    roughnessValue.style.cssText = 'color: #ecf0f1; font-weight: bold; min-width: 40px;'
+
+    roughnessSlider.addEventListener('input', () => {
+      roughnessValue.textContent = Math.round(roughnessSlider.value * 100) + '%'
+    })
+
+    roughnessContainer.appendChild(roughnessSlider)
+    roughnessContainer.appendChild(roughnessValue)
+
+    // Assemble material tab
+    container.appendChild(colorLabel)
+    container.appendChild(colorInput)
+    container.appendChild(opacityLabel)
+    container.appendChild(opacityContainer)
+    container.appendChild(wireframeLabel)
+    container.appendChild(metalnessLabel)
+    container.appendChild(metalnessContainer)
+    container.appendChild(roughnessLabel)
+    container.appendChild(roughnessContainer)
+
+    // Store inputs for later retrieval
+    container._inputs = {
+      color: colorInput,
+      opacity: opacitySlider,
+      wireframe: wireframeCheckbox,
+      metalness: metalnessSlider,
+      roughness: roughnessSlider
+    }
+
+    return container
+  }
+
+  /**
+   * Get dimensions from dialog
+   * @private
+   */
+  _getDimensionsFromDialog(dialog) {
+    const dimensionsTab = dialog.querySelector('.tab-content')
+    const inputs = dimensionsTab._inputs
+    return {
+      x: parseFloat(inputs.x.value) || 0,
+      y: parseFloat(inputs.y.value) || 0,
+      z: parseFloat(inputs.z.value) || 0
+    }
+  }
+
+  /**
+   * Get position from dialog
+   * @private
+   */
+  _getPositionFromDialog(dialog) {
+    const tabs = dialog.querySelectorAll('.tab-content')
+    const positionTab = tabs[1] // Position is second tab
+    const inputs = positionTab._inputs
+    return {
+      x: parseFloat(inputs.x.value) || 0,
+      y: parseFloat(inputs.y.value) || 0,
+      z: parseFloat(inputs.z.value) || 0
+    }
+  }
+
+  /**
+   * Get material from dialog
+   * @private
+   */
+  _getMaterialFromDialog(dialog) {
+    const tabs = dialog.querySelectorAll('.tab-content')
+    const materialTab = tabs[2] // Material is third tab
+    const inputs = materialTab._inputs
+    return {
+      color: inputs.color.value,
+      opacity: parseFloat(inputs.opacity.value) || 1.0,
+      wireframe: inputs.wireframe.checked,
+      metalness: parseFloat(inputs.metalness.value) || 0.1,
+      roughness: parseFloat(inputs.roughness.value) || 0.3
+    }
+  }
 }

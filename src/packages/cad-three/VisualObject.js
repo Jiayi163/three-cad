@@ -538,16 +538,17 @@ export class VisualObject extends Observable {
     /**
      * Update material state based on selection/highlight
      * @private
+     *
+     * NOTE: Selection and highlighting are now handled via outline overlays
+     * (see SelectionOverlay.js) rather than material changes.
+     * This method is kept for compatibility but does not change materials for selection/highlight.
      */
     _updateMaterialState() {
         if (!this._object3D) return;
 
-        let state = 'default';
-        if (this._selected) {
-            state = 'selected';
-        } else if (this._highlighted) {
-            state = 'highlighted';
-        }
+        // Material state is always 'default' now
+        // Selection and highlighting are handled via outline overlays in ThreeView
+        const state = 'default';
 
         const newMaterial = this.createMaterial(state);
         if (this._object3D.material !== newMaterial) {

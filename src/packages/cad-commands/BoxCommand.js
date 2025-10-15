@@ -271,23 +271,41 @@ export class BoxCommand extends GeometryCommand {
   }
 
   /**
-   * Execute command with dimension input dialogs
+   * Execute command with enhanced input dialog (dimensions, position, material)
    * @returns {Promise<CommandResult>}
    */
   async executeWithDimensionInput() {
     try {
-      console.log('Creating box with dimension input...')
+      console.log('Creating box with enhanced input dialog...')
 
       // Initialize interactive input
       const InteractiveInput = (await import('../cad-core/command/InteractiveInput.js')).InteractiveInput
       const interactiveInput = new InteractiveInput(this.application)
 
-      // Get all dimensions at once
-      const dimensions = await interactiveInput.getMultipleDimensions(
-        'Create Box - Enter Dimensions',
-        { x: this.width, y: '', z: this.depth },
-        { x: 'Length', y: 'Height', z: 'Width' },
-        { min: 0.1, max: 100 }
+      // Get enhanced object parameters (dimensions, position, material)
+      const params = await interactiveInput.getEnhancedObjectParameters(
+        'Create Box - Enhanced Settings',
+        {
+          dimensions: {
+            defaults: { x: this.width || 2, y: this.height || 2, z: this.depth || 2 },
+            labels: { x: 'Width (X)', y: 'Height (Y)', z: 'Depth (Z)' },
+            constraints: { min: 0.1, max: 100 }
+          },
+          position: {
+            defaults: { x: 0, y: 0, z: 0 },
+            labels: { x: 'Position X', y: 'Position Y', z: 'Position Z' },
+            constraints: { min: -1000, max: 1000 }
+          },
+          material: {
+            defaults: {
+              color: this.color || '#4CAF50',
+              opacity: this.opacity || 1.0,
+              wireframe: this.wireframe || false,
+              metalness: 0.1,
+              roughness: 0.3
+            }
+          }
+        }
       )
 
       if (this.isCancelled) {
@@ -295,14 +313,28 @@ export class BoxCommand extends GeometryCommand {
       }
 
       // Set the dimensions (note: X=width, Y=height, Z=depth)
-      this.setDimensions(dimensions.x, dimensions.y, dimensions.z)
+      this.setDimensions(params.dimensions.x, params.dimensions.y, params.dimensions.z)
+
+      // Set the position
+      this.setPosition(params.position.x, params.position.y, params.position.z)
+
+      // Set the material properties
+      this.setMaterial(
+        params.material.color,
+        params.material.opacity,
+        params.material.wireframe
+      )
+
+      // Store additional material properties
+      this.metalness = params.material.metalness
+      this.roughness = params.material.roughness
 
       // Create the final box directly (bypassing corner-based creation)
       const finalBox = await this.createFinalBoxDirect()
 
       return CommandResult.success(
         finalBox,
-        `Box created successfully: ${finalBox.name} (${dimensions.x} × ${dimensions.y} × ${dimensions.z})`
+        `Box created successfully: ${finalBox.name} (${params.dimensions.x} × ${params.dimensions.y} × ${params.dimensions.z})`
       )
 
     } catch (error) {
@@ -527,6 +559,71 @@ export class BoxCommand extends GeometryCommand {
   }
 
   /**
+   * Create the final box object directly with preset dimensions and position
+   * @returns {Promise<VisualObject>} Created box object
+   */
+  async createFinalBoxDirect() {
+    // Use the preset dimensions and position
+    const width = this.width
+    const height = this.height
+    const depth = this.depth
+
+    // Create BoxVisualObject with proper parameters
+    const visualObject = new BoxVisualObject(null, {
+      width: width,
+      height: height,
+      depth: depth
+    })
+
+    visualObject.name = `Box_${Date.now()}`
+
+    // Configure material properties with enhanced settings
+    visualObject.setMaterialConfig('default', {
+      color: this.color,
+      opacity: this.opacity,
+      transparent: this.opacity < 1.0,
+      wireframe: this.wireframe,
+      metalness: this.metalness || 0.1,
+      roughness: this.roughness || 0.3
+    })
+
+    // Set transform properties using the preset position
+    visualObject.position = { ...this.position }
+    visualObject.rotation = { x: 0, y: 0, z: 0 }
+    visualObject.scale = { x: 1, y: 1, z: 1 }
+
+    // Set properties for the property panel
+    visualObject.setProperty('type', 'Box')
+    visualObject.setProperty('width', width)
+    visualObject.setProperty('height', height)
+    visualObject.setProperty('depth', depth)
+    visualObject.setProperty('color', this.color)
+    visualObject.setProperty('opacity', this.opacity)
+    visualObject.setProperty('wireframe', this.wireframe)
+    visualObject.setProperty('metalness', this.metalness || 0.1)
+    visualObject.setProperty('roughness', this.roughness || 0.3)
+    visualObject.setProperty('volume', width * height * depth)
+
+    // Add to the active document with proper nodeData format
+    const nodeData = {
+      id: visualObject.id,
+      name: visualObject.name,
+      type: visualObject.type || visualObject._type,
+      visible: true,
+      locked: false,
+      geometry: visualObject.geometry,
+      visualObject: markRaw(visualObject)  // Prevent Vue reactivity on VisualObject
+    }
+
+    await this.application.activeDocument.addNode(nodeData)
+
+    // Track the created object for undo/redo
+    this.addCreatedObject(visualObject)
+
+    return visualObject
+  }
+
+  /**
    * Create the final box object
    * @returns {Promise<VisualObject>} Created box object
    */
@@ -560,8 +657,8 @@ export class BoxCommand extends GeometryCommand {
       opacity: this.opacity,
       transparent: this.opacity < 1.0,
       wireframe: this.wireframe,
-      metalness: 0.1,
-      roughness: 0.3
+      metalness: this.metalness || 0.1,
+      roughness: this.roughness || 0.3
     })
 
     // Set transform properties
@@ -577,6 +674,8 @@ export class BoxCommand extends GeometryCommand {
     visualObject.setProperty('color', this.color)
     visualObject.setProperty('opacity', this.opacity)
     visualObject.setProperty('wireframe', this.wireframe)
+    visualObject.setProperty('metalness', this.metalness || 0.1)
+    visualObject.setProperty('roughness', this.roughness || 0.3)
     visualObject.setProperty('volume', width * height * depth)
 
     // Add to the active document with proper nodeData format
