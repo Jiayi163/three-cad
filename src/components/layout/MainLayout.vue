@@ -324,15 +324,6 @@
         </div>
 
         <div class="viewport-header">
-          <div class="viewport-tabs">
-            <div class="viewport-tab active">
-              <span
-                @mouseenter="showViewportControls = true"
-                @mouseleave="showViewportControls = false"
-                class="viewport-tab-text"
-              >3D View</span>
-            </div>
-          </div>
           <div class="viewport-controls">
             <button class="control-button" @click="toggleWireframe" title="Toggle Wireframe">
               🔲
@@ -1372,22 +1363,6 @@ export default {
   padding: 0 12px;
 }
 
-.viewport-tabs {
-  display: flex;
-}
-
-.viewport-tab {
-  padding: 6px 12px;
-  background-color: #3e3e42;
-  border-radius: 3px 3px 0 0;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.viewport-tab.active {
-  background-color: #1e1e1e;
-  color: #ffffff;
-}
 
 .viewport-controls {
   display: flex;
@@ -1599,16 +1574,6 @@ export default {
   text-align: right;
 }
 
-.viewport-tab-text {
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
-  transition: background-color 0.2s;
-}
-
-.viewport-tab-text:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
 
 /* Responsive design */
 @media (max-width: 768px) {
