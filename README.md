@@ -29,7 +29,6 @@ Three-CAD is a browser-based Computer-Aided Design (CAD) application that provid
 ### Development Features
 - **Modular Architecture**: Package-based organization (cad-core, cad-three, cad-ui, cad-commands)
 - **TypeScript Support**: Full type safety and IntelliSense
-- **Testing Framework**: Comprehensive unit and integration tests
 - **Hot Reload**: Fast development with Vite
 
 ## Technology Stack
@@ -37,7 +36,6 @@ Three-CAD is a browser-based Computer-Aided Design (CAD) application that provid
 - **Frontend**: Vue.js 3, Vite
 - **3D Engine**: Three.js
 - **Build Tools**: Vite, ESLint
-- **Testing**: Vitest, Playwright
 - **Styling**: CSS3 with professional CAD theme
 
 ## Project Setup
@@ -72,18 +70,6 @@ npm run dev
 npm run build
 ```
 
-### Testing
-
-```sh
-# Run unit tests
-npm run test:unit
-
-# Run end-to-end tests
-npm run test:e2e
-
-# Run all tests
-npm run test
-```
 
 ### Code Quality
 
@@ -122,7 +108,6 @@ We welcome contributions! Please see our development guidelines and ensure all c
 
 - All code comments and documentation must be in English
 - Follow Vue.js and Three.js best practices
-- Maintain comprehensive test coverage
 - Use TypeScript for type safety
 
 ## License

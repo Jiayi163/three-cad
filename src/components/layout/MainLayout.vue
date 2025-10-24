@@ -267,6 +267,16 @@
             <span class="button-text">Materials</span>
           </button>
 
+          <button
+            class="material-button"
+            :class="{ active: showScenePanel }"
+            @click="showScenePanel = !showScenePanel"
+            title="Open Scene Background Panel"
+          >
+            <span class="button-icon">🌄</span>
+            <span class="button-text">Scene</span>
+          </button>
+
           <Tooltip content="Toggle Properties Panel" shortcut="P">
             <button
               class="cad-button tool-button"
@@ -321,6 +331,11 @@
         <!-- Material Panel (Floating) -->
         <div v-if="showMaterialPanel" class="floating-material-panel">
           <SimpleMaterialPanel />
+        </div>
+
+        <!-- Scene Background Panel (Floating) -->
+        <div v-if="showScenePanel" class="floating-scene-panel">
+          <SceneBackgroundPanel />
         </div>
 
         <div class="viewport-header">
@@ -498,6 +513,7 @@ import PropertyPanel from '@/packages/cad-ui/components/PropertyPanel.vue'
 import StatusBar from '@/packages/cad-ui/components/StatusBar.vue'
 import Tooltip from '@/components/ui/Tooltip.vue'
 import SimpleMaterialPanel from '@/components/SimpleMaterialPanel.vue'
+import SceneBackgroundPanel from '@/components/ui/SceneBackgroundPanel.vue'
 import KeyboardShortcuts from '@/components/ui/KeyboardShortcuts.vue'
 import ImportExportDialog from '@/packages/cad-ui/components/ImportExportDialog.vue'
 
@@ -509,6 +525,7 @@ export default {
     StatusBar,
     Tooltip,
     SimpleMaterialPanel,
+    SceneBackgroundPanel,
     KeyboardShortcuts,
     ImportExportDialog
   },
@@ -535,6 +552,7 @@ export default {
     const showKeyboardShortcuts = ref(false)
     const showViewportControls = ref(false)
     const showMaterialPanel = ref(false)
+    const showScenePanel = ref(false)
     const showImportExportDialog = ref(false)
     const importExportMode = ref('export') // 'export' or 'import'
 
@@ -984,6 +1002,7 @@ export default {
       showKeyboardShortcuts,
       showViewportControls,
       showMaterialPanel,
+      showScenePanel,
       showImportExportDialog,
       importExportMode,
       panels,
@@ -1667,6 +1686,16 @@ export default {
   position: absolute;
   top: 60px;
   right: 20px;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  animation: slideInRight 0.3s ease-out;
+}
+
+/* Scene Background Panel Floating */
+.floating-scene-panel {
+  position: absolute;
+  top: 60px;
+  right: 360px; /* Position to the left of material panel */
   z-index: 100;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   animation: slideInRight 0.3s ease-out;

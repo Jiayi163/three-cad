@@ -223,16 +223,17 @@ export class ThreeView extends Observable {
         this.element.style.position = 'relative'
       }
 
-      // Create ViewCube with main camera and scene for perfect 1:1 mirroring
+      // Create ViewCube navigation control with main camera and controls
       this.viewCube = new ViewCube({
         container: this.element,
         mainCamera: this.rawCamera,
-        mainScene: this.scene,
-        size: 120,
+        controls: this.cameraController,
+        threeView: this, // Pass reference to ThreeView for forcing renders
+        size: 180,
         margin: 12
       })
 
-      console.log('ViewCube initialized in ThreeView (1:1 mirror mode)')
+      console.log('ViewCube navigation control initialized')
     } catch (error) {
       console.error('Failed to initialize ViewCube:', error)
     }
@@ -499,8 +500,8 @@ export class ThreeView extends Observable {
       this._setObjectSelected(object, true)
 
       // Update document selection if possible
-      // Skip demo objects as they are not real document nodes
-      if (this.document && object.userData.nodeId && !object.userData.nodeId.startsWith('demo-')) {
+      // Skip temporary objects as they are not real document nodes
+      if (this.document && object.userData.nodeId && !object.userData.nodeId.startsWith('temp-')) {
         // Find the actual node object by ID
         const node = this.document.findNodeById(object.userData.nodeId)
         if (node) {

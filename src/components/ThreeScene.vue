@@ -157,7 +157,7 @@ export default {
           window.__THREESCENE_INSTANCE__ = threeView.value
         }
 
-        // Demo objects removed - clean start
+        // Clean initialization
 
         // Set up document node listeners
         setupDocumentListeners()

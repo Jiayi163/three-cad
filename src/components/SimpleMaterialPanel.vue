@@ -53,24 +53,6 @@
         </div>
       </div>
 
-      <!-- Background Section -->
-      <div class="background-section">
-        <h4>Scene Background</h4>
-        <div class="background-grid">
-          <div
-            v-for="bg in backgroundColors"
-            :key="bg.id"
-            class="background-card"
-            :class="{ active: selectedBackground === bg.id }"
-            @click="applyBackground(bg)"
-            :title="bg.name"
-          >
-            <div class="background-preview" :style="{ background: bg.color }"></div>
-            <span class="background-name">{{ bg.name }}</span>
-          </div>
-        </div>
-      </div>
-
       <!-- Apply Button -->
       <div class="action-section">
         <button
@@ -99,7 +81,6 @@ export default {
   setup() {
     const appStore = useApplicationStore()
     const selectedMaterial = ref('standard')
-    const selectedBackground = ref('dark-gray')
     const selectedTexture = ref(null)
     const texturePreviewUrl = ref(null)
     const textureFileInput = ref(null)
@@ -113,16 +94,6 @@ export default {
       { id: 'glass', name: 'Glass', color: '#A0D8F8', hexColor: 0xA0D8F8 },
       { id: 'wood', name: 'Wood', color: '#8B6F47', hexColor: 0x8B6F47 },
       { id: 'rubber', name: 'Rubber', color: '#2C2C2C', hexColor: 0x2C2C2C },
-    ]
-
-    // Background color presets
-    const backgroundColors = [
-      { id: 'dark-gray', name: 'Dark Gray', color: '#222222', hexColor: 0x222222 },
-      { id: 'black', name: 'Black', color: '#000000', hexColor: 0x000000 },
-      { id: 'light-gray', name: 'Light Gray', color: '#CCCCCC', hexColor: 0xCCCCCC },
-      { id: 'white', name: 'White', color: '#FFFFFF', hexColor: 0xFFFFFF },
-      { id: 'blue', name: 'Sky Blue', color: '#87CEEB', hexColor: 0x87CEEB },
-      { id: 'gradient', name: 'Gradient', color: 'linear-gradient(180deg, #1a1a2e 0%, #16213e 100%)', hexColor: 0x1a1a2e },
     ]
 
     const hasSelection = computed(() => {
@@ -191,32 +162,6 @@ export default {
       selectedMaterial.value = 'standard'
       if (textureFileInput.value) {
         textureFileInput.value.value = ''
-      }
-    }
-
-    const applyBackground = (bgConfig) => {
-      try {
-        selectedBackground.value = bgConfig.id
-        console.log('Applying background:', bgConfig.name)
-
-        // Get ThreeView from global reference
-        const threeView = window.__THREESCENE_INSTANCE__
-        if (!threeView || !threeView.scene) {
-          console.warn('ThreeView not available')
-          alert('Please wait for the 3D scene to fully load')
-          return
-        }
-
-        // Apply background color to the scene
-        threeView.scene.background = new THREE.Color(bgConfig.hexColor)
-
-        // Update settings
-        threeView.settings.backgroundColor = new THREE.Color(bgConfig.hexColor)
-
-        console.log(`✅ Background changed to ${bgConfig.name}`)
-      } catch (error) {
-        console.error('Failed to apply background:', error)
-        alert('Failed to change background: ' + error.message)
       }
     }
 
@@ -398,9 +343,7 @@ export default {
 
     return {
       basicMaterials,
-      backgroundColors,
       selectedMaterial,
-      selectedBackground,
       selectedTexture,
       texturePreviewUrl,
       textureFileInput,
@@ -412,8 +355,7 @@ export default {
       handleFileSelect,
       handleFileDrop,
       clearTexture,
-      applyMaterial,
-      applyBackground
+      applyMaterial
     }
   }
 }
@@ -679,66 +621,5 @@ export default {
   font-weight: 500;
 }
 
-/* Background Section */
-.background-section {
-  border-top: 1px solid #3a3a3a;
-  padding-top: 16px;
-}
-
-.background-section h4 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  color: #bdc3c7;
-  font-weight: 500;
-}
-
-.background-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.background-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 8px;
-  background: #1a1a1a;
-  border: 2px solid transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.background-card:hover {
-  background: #333333;
-  border-color: #3498db;
-}
-
-.background-card.active {
-  background: #2c3e50;
-  border-color: #3498db;
-  box-shadow: 0 0 8px rgba(52, 152, 219, 0.4);
-}
-
-.background-preview {
-  width: 50px;
-  height: 50px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.background-name {
-  font-size: 10px;
-  color: #bdc3c7;
-  text-align: center;
-}
-
-.background-card.active .background-name {
-  color: #3498db;
-  font-weight: 600;
-}
 </style>
 

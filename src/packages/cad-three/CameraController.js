@@ -44,6 +44,9 @@ export class CameraController extends Observable {
     this.dampingFactor = 0.05
     this.isAnimating = false
     
+    // External control flag (e.g., ViewCube animation)
+    this.externalControl = false
+    
     // Control sensitivity
     this.rotateSpeed = 0.2  // Lower = less sensitive rotation (reduced from 0.5)
     this.panSpeed = 0.5     // Pan sensitivity (reduced from 1.0)
@@ -270,6 +273,24 @@ export class CameraController extends Observable {
   update() {
     if (!this.camera) return
     
+    // Skip update if camera is under external control (e.g., ViewCube animation)
+    if (this.externalControl) {
+      if (!this._loggedExternalControl) {
+        console.log('⏸️ CameraController.update() skipped - external control active')
+        this._loggedExternalControl = true
+      }
+      return
+    }
+    
+    // Reset log flag when control is released
+    if (this._loggedExternalControl) {
+      console.log('▶️ CameraController.update() resumed')
+      this._loggedExternalControl = false
+    }
+    
+    // Store old position for debugging
+    const oldPos = this.camera.position.clone()
+    
     // Apply spherical delta (rotation)
     this.spherical.theta += this.sphericalDelta.theta
     this.spherical.phi += this.sphericalDelta.phi
@@ -291,6 +312,40 @@ export class CameraController extends Observable {
     // Position camera
     this.camera.position.copy(this.target).add(offset)
     this.camera.lookAt(this.target)
+    
+    // CRITICAL: Do NOT reset camera.up after ViewCube animation
+    // The ViewCube sets the correct up-vector for orthographic views
+    if (this._justReleasedControl && this._preserveUpVector) {
+      // Preserve the up-vector set by ViewCube for orthographic views
+      this.camera.up.copy(this._preserveUpVector)
+      // Clear the flag after a few frames to allow normal camera control
+      if (this._frameCount > 3) {
+        this._justReleasedControl = false
+        this._preserveUpVector = null
+        this._frameCount = 0
+      } else {
+        this._frameCount = (this._frameCount || 0) + 1
+      }
+    } else if (!this._justReleasedControl) {
+      // For normal camera control, maintain Y-up orientation
+      this.camera.up.set(0, 1, 0)
+    }
+    
+    // Debug log if position changed significantly after ViewCube animation
+    const posChange = this.camera.position.distanceTo(oldPos)
+    if (posChange > 0.1 && this._justReleasedControl) {
+      console.warn('⚠️ CameraController.update() changed position after ViewCube!', {
+        oldPos,
+        newPos: this.camera.position.clone(),
+        spherical: {
+          theta: this.spherical.theta,
+          phi: this.spherical.phi,
+          radius: this.spherical.radius
+        },
+        target: this.target.clone()
+      })
+      this._justReleasedControl = false
+    }
     
     // Apply damping
     if (this.enableDamping) {
@@ -330,6 +385,12 @@ export class CameraController extends Observable {
    * Set camera to a predefined view
    */
   setView(viewName, animate = true) {
+    // Skip view changes if camera is under external control (ViewCube animation)
+    if (this.externalControl) {
+      console.log('⏸️ setView() skipped - external control active')
+      return
+    }
+    
     const preset = this.viewPresets[viewName]
     if (!preset) {
       console.warn(`Unknown view preset: ${viewName}`)
@@ -419,6 +480,12 @@ export class CameraController extends Observable {
   focusOn(boundingBox, animate = true) {
     if (!boundingBox || !this.camera) return
     
+    // Skip focus operations if camera is under external control (ViewCube animation)
+    if (this.externalControl) {
+      console.log('⏸️ focusOn() skipped - external control active')
+      return
+    }
+    
     const center = boundingBox.getCenter(new THREE.Vector3())
     const size = boundingBox.getSize(new THREE.Vector3())
     const maxDim = Math.max(size.x, size.y, size.z)
@@ -452,6 +519,12 @@ export class CameraController extends Observable {
    */
   fitAll(animate = true) {
     if (!this.threeView.scene) return
+    
+    // Skip fit operations if camera is under external control (ViewCube animation)
+    if (this.externalControl) {
+      console.log('⏸️ fitAll() skipped - external control active')
+      return
+    }
     
     const box = new THREE.Box3()
     box.setFromObject(this.threeView.scene)
