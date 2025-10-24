@@ -11,6 +11,7 @@
 
 import * as THREE from 'three'
 import { db, isIndexedDBAvailable } from './PersistenceDB.js'
+import { isSilentMode } from './AutoSaveSettings.js'
 
 const STATE_VERSION = 1
 const STATE_KEY = 'latest'
@@ -55,7 +56,9 @@ export async function saveState({
   }
 
   try {
-    console.log('💾 Saving application state...')
+    if (!isSilentMode()) {
+      console.log('💾 Saving application state...')
+    }
 
     // Store texture blobs
     for (const textureInfo of textures) {
@@ -66,7 +69,9 @@ export async function saveState({
           type: textureInfo.blob.type,
           savedAt: Date.now()
         })
-        console.log(`  📦 Saved texture blob: ${textureInfo.id}`)
+        if (!isSilentMode()) {
+          console.log(`  📦 Saved texture blob: ${textureInfo.id}`)
+        }
       }
     }
 
@@ -144,7 +149,9 @@ export async function saveState({
       value: new Date().toISOString()
     })
 
-    console.log('✅ Application state saved successfully')
+    if (!isSilentMode()) {
+      console.log('✅ Application state saved successfully')
+    }
     return true
 
   } catch (error) {

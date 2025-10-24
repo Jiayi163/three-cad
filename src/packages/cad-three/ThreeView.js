@@ -10,6 +10,7 @@ import { VisualObject } from './VisualObject.js'
 import { ViewCube } from './ViewCube.js'
 import { SelectionOverlay } from './SelectionOverlay.js'
 import { saveStateDebounced, restoreScene, hasPersistedState, loadState } from '../cad-core/io/ScenePersistence.js'
+import { isAutoSaveEnabled, isAutoRestoreEnabled, isSilentMode, getDebounceDelay } from '../cad-core/io/AutoSaveSettings.js'
 
 export class ThreeView extends Observable {
   constructor(document, name = 'default') {
@@ -20,6 +21,7 @@ export class ThreeView extends Observable {
     this.name = name
     this.element = null
     this.isInitialized = false
+    this._isRestoringState = false  // Flag to prevent auto-save during restore
 
     // Three.js components
     this.scene = null
@@ -73,6 +75,20 @@ export class ThreeView extends Observable {
     // Initialize
     this._initializeScene()
     this._setupEventHandlers()
+    this._setupDocumentListeners()
+  }
+
+  /**
+   * Setup listeners for document changes to trigger auto-save
+   */
+  _setupDocumentListeners() {
+    if (!this.document) return
+
+    // Listen for document modifications
+    this.document.onPropertyChanged('isModified', () => {
+      // Document was modified, trigger auto-save
+      this._triggerAutoSave()
+    })
   }
 
   /**
@@ -425,6 +441,9 @@ export class ThreeView extends Observable {
       // Initialize ViewCube (two-pass mini mirror)
       // No complex orientation sync needed - it just renders the same scene/camera
       this._initializeViewCube()
+
+      // Auto-restore saved state if enabled
+      this._tryAutoRestore()
 
       // Start render loop
       this._startRenderLoop()
@@ -1055,10 +1074,118 @@ export class ThreeView extends Observable {
   }
 
   /**
+   * Try to auto-restore saved state on initialization
+   * Silent operation - logs only on success or error
+   */
+  async _tryAutoRestore() {
+    if (!isAutoRestoreEnabled()) {
+      console.log('ℹ️ Auto-restore disabled')
+      return
+    }
+
+    try {
+      const hasSavedState = await hasPersistedState()
+      if (!hasSavedState) {
+        console.log('📭 No saved state to restore')
+        return
+      }
+
+      console.log('🔄 Auto-restoring scene state...')
+      this._isRestoringState = true
+
+      // Load state
+      const savedState = await loadState()
+      if (!savedState) {
+        console.warn('⚠️ Failed to load saved state')
+        return
+      }
+
+      // Restore scene
+      const restored = await restoreScene(savedState, this.renderer)
+      if (!restored) {
+        console.warn('⚠️ Failed to restore scene')
+        return
+      }
+
+      // Replace current scene and camera
+      this.scene = restored.scene
+      this.camera = restored.camera
+
+      // Update camera aspect ratio
+      if (this.element) {
+        const width = this.element.clientWidth
+        const height = this.element.clientHeight
+        this.camera.aspect = width / height
+        this.camera.updateProjectionMatrix()
+      }
+
+      // Restore environment/background
+      if (restored.environment && restored.environment.kind !== 'none') {
+        // TODO: Restore EXR/HDR background if needed
+        // For now, just restore color background
+        if (restored.environment.kind === 'color' && restored.environment.color !== undefined) {
+          this.scene.background = new THREE.Color(restored.environment.color)
+        }
+      }
+
+      // Update camera controller target
+      if (this.cameraController) {
+        this.cameraController.camera = this.camera
+      }
+
+      // Store restored textures in registry
+      if (restored.textureMap) {
+        this._textureRegistry = this._textureRegistry || new Map()
+        for (const [id, texture] of restored.textureMap.entries()) {
+          this._textureRegistry.set(id, {
+            name: 'restored_texture',
+            texture
+          })
+        }
+      }
+
+      // Store environment data
+      if (restored.environment) {
+        this._environmentData = restored.environment
+      }
+
+      // Request render
+      this.requestRender()
+
+      if (!isSilentMode()) {
+        console.log('✅ Scene auto-restored successfully')
+      }
+
+    } catch (error) {
+      console.error('❌ Auto-restore failed:', error)
+    } finally {
+      this._isRestoringState = false
+    }
+  }
+
+  /**
+   * Trigger auto-save if enabled (debounced)
+   * Called automatically after scene changes
+   */
+  _triggerAutoSave() {
+    if (!isAutoSaveEnabled() || this._isRestoringState) {
+      return
+    }
+
+    // Debounced save
+    this.saveSceneState()
+  }
+
+  /**
    * Save current scene state to IndexedDB (debounced)
    * Auto-persists: scene geometry, materials, textures, environment, camera, UI
    */
   async saveSceneState() {
+    // Skip if auto-save is disabled or we're restoring
+    if (!isAutoSaveEnabled() || this._isRestoringState) {
+      return
+    }
+
     try {
       // Collect texture metadata
       const textureMetadata = []
@@ -1122,7 +1249,9 @@ export class ThreeView extends Observable {
         }
       })
 
-      console.log('💾 Scene state saved (debounced)')
+      if (!isSilentMode()) {
+        console.log('💾 Scene state auto-saved')
+      }
     } catch (error) {
       console.error('❌ Failed to save scene state:', error)
     }
@@ -1148,6 +1277,9 @@ export class ThreeView extends Observable {
     })
 
     console.log(`📝 Registered texture for persistence: ${metadata.name} (${texture.uuid})`)
+    
+    // Trigger auto-save after texture registration
+    this._triggerAutoSave()
   }
 
   /**
@@ -1158,6 +1290,9 @@ export class ThreeView extends Observable {
   registerEnvironment(envData) {
     this._environmentData = envData
     console.log(`🌄 Registered environment for persistence:`, envData.kind)
+    
+    // Trigger auto-save after environment change
+    this._triggerAutoSave()
   }
 
   /**

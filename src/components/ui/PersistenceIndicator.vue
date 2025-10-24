@@ -18,6 +18,19 @@
       </div>
 
       <div class="menu-content">
+        <!-- Auto-save toggle -->
+        <div class="autosave-section">
+          <label class="autosave-toggle">
+            <input type="checkbox" v-model="autoSaveEnabled" @change="toggleAutoSave">
+            <span class="toggle-text">
+              <strong>Auto-Save:</strong> {{ autoSaveEnabled ? 'Enabled' : 'Disabled' }}
+            </span>
+          </label>
+          <p class="autosave-hint">
+            {{ autoSaveEnabled ? 'Scene saves automatically on every change (Ctrl+R safe)' : 'Enable to auto-save your work' }}
+          </p>
+        </div>
+
         <div v-if="hasPersistedData" class="status-section">
           <div class="status-item">
             <span class="label">Last Saved:</span>
@@ -30,8 +43,8 @@
         </div>
 
         <div v-else class="no-data">
-          <p>No saved scene data</p>
-          <p class="hint">Your scene will auto-save when you make changes</p>
+          <p>No saved scene data yet</p>
+          <p class="hint">Create objects and they'll be auto-saved</p>
         </div>
 
         <div class="actions">
@@ -74,13 +87,13 @@
 
         <div class="info-section">
           <p class="info-text">
-            <strong>Auto-Save:</strong> Your scene automatically saves when you:
+            <strong>How Auto-Save Works:</strong>
           </p>
           <ul class="info-list">
-            <li>Apply materials or textures</li>
-            <li>Change texture repeat settings</li>
-            <li>Modify scene background</li>
-            <li>Create or edit geometry</li>
+            <li>Saves automatically on every change (debounced 500ms)</li>
+            <li>Press Ctrl+R to refresh - everything restored instantly</li>
+            <li>Textures stored as Blobs (large files supported)</li>
+            <li>Includes materials, camera, background, and all settings</li>
           </ul>
         </div>
       </div>
@@ -120,6 +133,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApplicationStore } from '@/stores/application'
 import { hasPersistedState, getLastSavedTime, clearPersistedState, exportStateToFile } from '@/packages/cad-core/io/ScenePersistence.js'
 import { getDBStats } from '@/packages/cad-core/io/PersistenceDB.js'
+import { isAutoSaveEnabled, setAutoSaveEnabled, getAutoSaveSettings } from '@/packages/cad-core/io/AutoSaveSettings.js'
 
 export default {
   name: 'PersistenceIndicator',
@@ -134,13 +148,15 @@ export default {
     const storageSize = ref('0 MB')
     const showRestoreDialog = ref(false)
     const showClearDialog = ref(false)
+    const autoSaveEnabled = ref(isAutoSaveEnabled())
 
     let checkInterval = null
 
     const tooltipText = computed(() => {
-      if (isSaving.value) return 'Saving scene...'
-      if (hasPersistedData.value) return `Scene saved ${formattedTime.value}`
-      return 'Scene auto-save'
+      if (!autoSaveEnabled.value) return 'Auto-save disabled'
+      if (isSaving.value) return 'Auto-saving scene...'
+      if (hasPersistedData.value) return `Auto-saved ${formattedTime.value}`
+      return 'Auto-save active'
     })
 
     const formattedTime = computed(() => {
@@ -172,6 +188,12 @@ export default {
     const closeMenu = () => {
       showMenu.value = false
       emit('menu-toggle', false)
+    }
+
+    const toggleAutoSave = () => {
+      autoSaveEnabled.value = !autoSaveEnabled.value
+      setAutoSaveEnabled(autoSaveEnabled.value)
+      console.log(`Auto-save ${autoSaveEnabled.value ? 'enabled' : 'disabled'}`)
     }
 
     const checkStatus = async () => {
@@ -274,6 +296,8 @@ export default {
       lastSavedFull,
       toggleMenu,
       closeMenu,
+      toggleAutoSave,
+      autoSaveEnabled,
       manualSave,
       restoreScene,
       clearData,
@@ -395,6 +419,41 @@ export default {
 
 .menu-content {
   padding: 16px;
+}
+
+/* Auto-save Section */
+.autosave-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(46, 204, 113, 0.1);
+  border: 1px solid rgba(46, 204, 113, 0.3);
+  border-radius: 6px;
+}
+
+.autosave-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.autosave-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #2ecc71;
+}
+
+.autosave-toggle .toggle-text {
+  font-size: 13px;
+  color: #ecf0f1;
+}
+
+.autosave-hint {
+  margin: 8px 0 0 28px;
+  font-size: 11px;
+  color: #95a5a6;
+  line-height: 1.4;
 }
 
 .status-section {
