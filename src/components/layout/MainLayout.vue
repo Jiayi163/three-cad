@@ -1,13 +1,48 @@
 <template>
-  <div class="main-layout">
+  <div
+    class="main-layout"
+    :class="[
+      `layout-mode-${layoutMode}`,
+      { 'is-mobile': isMobile, 'is-tablet': isTablet, 'is-desktop': isDesktop }
+    ]"
+  >
+    <!-- Layout Mode Indicator (Development) -->
+    <LayoutModeIndicator :show="showViewportControls" />
+
     <!-- Top menu bar -->
-    <div class="menu-bar">
+    <div class="menu-bar" :class="{ 'compact': isMobile || isTablet }">
       <div class="menu-bar-left">
+        <!-- Mobile menu toggle -->
+        <button
+          v-if="isMobile || isTablet"
+          class="mobile-menu-toggle"
+          @click="activeMenu = activeMenu === 'mobile' ? null : 'mobile'"
+          title="Menu"
+        >
+          <span class="hamburger-icon">☰</span>
+        </button>
+
         <div class="app-logo">
           <span class="logo-icon">📐</span>
           <span class="app-name">CAD Studio</span>
         </div>
-        <nav class="main-menu">
+
+        <!-- Mobile dropdown menu -->
+        <div v-if="(isMobile || isTablet) && activeMenu === 'mobile'" class="mobile-dropdown">
+          <div class="menu-option" @click="handleMenuAction('new')">New Document</div>
+          <div class="menu-option" @click="handleMenuAction('open')">Open...</div>
+          <div class="menu-option" @click="handleMenuAction('save')">Save</div>
+          <div class="menu-divider"></div>
+          <div class="menu-option" @click="handleMenuAction('import')">Import...</div>
+          <div class="menu-option" @click="handleMenuAction('export')">Export...</div>
+          <div class="menu-divider"></div>
+          <div class="menu-option" @click="handleMenuAction('undo')">Undo</div>
+          <div class="menu-option" @click="handleMenuAction('redo')">Redo</div>
+          <div class="menu-divider"></div>
+          <div class="menu-option" @click="togglePanel('right')">Properties Panel</div>
+        </div>
+
+        <nav class="main-menu" v-if="!isMobile && !isTablet">
           <div class="menu-item" @click="activeMenu = activeMenu === 'file' ? null : 'file'">
             File
             <div v-if="activeMenu === 'file'" class="dropdown-menu">
@@ -258,20 +293,26 @@
       <div class="toolbar-section toolbar-right">
         <div class="view-controls">
           <button
+            ref="materialButtonRef"
             class="material-button"
             :class="{ active: showMaterialPanel }"
             @click="showMaterialPanel = !showMaterialPanel"
             title="Open Material Selection Panel"
+            data-panel-id="material"
+            aria-controls="material-panel"
           >
             <span class="button-icon">🎨</span>
             <span class="button-text">Materials</span>
           </button>
 
           <button
+            ref="sceneButtonRef"
             class="material-button"
             :class="{ active: showScenePanel }"
             @click="showScenePanel = !showScenePanel"
             title="Open Scene Background Panel"
+            data-panel-id="scene"
+            aria-controls="scene-panel"
           >
             <span class="button-icon">🌄</span>
             <span class="button-text">Scene</span>
@@ -329,12 +370,26 @@
       <!-- Central viewport area -->
       <div class="viewport-area">
         <!-- Material Panel (Floating) -->
-        <div v-if="showMaterialPanel" class="floating-material-panel">
+        <div
+          v-if="showMaterialPanel"
+          ref="materialPanelRef"
+          id="material-panel"
+          class="floating-material-panel"
+          :style="materialPanelStyle"
+          data-panel="material"
+        >
           <SimpleMaterialPanel />
         </div>
 
         <!-- Scene Background Panel (Floating) -->
-        <div v-if="showScenePanel" class="floating-scene-panel">
+        <div
+          v-if="showScenePanel"
+          ref="scenePanelRef"
+          id="scene-panel"
+          class="floating-scene-panel"
+          :style="scenePanelStyle"
+          data-panel="scene"
+        >
           <SceneBackgroundPanel />
         </div>
 
@@ -429,9 +484,17 @@
       <div
         v-if="panels.right.visible"
         class="side-panel right-panel"
-        :style="{ width: panels.right.width + 'px' }"
+        :class="{
+          'overlay-panel': shouldUseOverlay('rightPanel'),
+          'docked-panel': !shouldUseOverlay('rightPanel')
+        }"
+        :style="{
+          width: panels.right.width + 'px',
+          maxWidth: isMobile ? '90vw' : '500px'
+        }"
       >
         <div
+          v-if="canResizePanel('right')"
           class="panel-resizer left"
           @mousedown="startResize('right', $event)"
         ></div>
@@ -443,6 +506,13 @@
           <component :is="panels.right.component" v-if="panels.right.component" />
         </div>
       </div>
+
+      <!-- Overlay backdrop for mobile/tablet -->
+      <div
+        v-if="panels.right.visible && shouldUseOverlay('rightPanel')"
+        class="panel-backdrop"
+        @click="togglePanel('right')"
+      ></div>
     </div>
 
     <!-- Bottom status bar -->
@@ -504,10 +574,12 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApplicationStore } from '@/stores/application'
 import { usePanelState } from '@/composables/usePanelState'
+import { useResponsiveLayout } from '@/composables/useResponsiveLayout'
+import { usePanelPositioning } from '@/composables/usePanelPositioning'
 import ToolPalette from '@/packages/cad-ui/components/ToolPalette.vue'
 import PropertyPanel from '@/packages/cad-ui/components/PropertyPanel.vue'
 import StatusBar from '@/packages/cad-ui/components/StatusBar.vue'
@@ -516,6 +588,7 @@ import SimpleMaterialPanel from '@/components/SimpleMaterialPanel.vue'
 import SceneBackgroundPanel from '@/components/ui/SceneBackgroundPanel.vue'
 import KeyboardShortcuts from '@/components/ui/KeyboardShortcuts.vue'
 import ImportExportDialog from '@/packages/cad-ui/components/ImportExportDialog.vue'
+import LayoutModeIndicator from '@/components/ui/LayoutModeIndicator.vue'
 
 export default {
   name: 'MainLayout',
@@ -527,7 +600,8 @@ export default {
     SimpleMaterialPanel,
     SceneBackgroundPanel,
     KeyboardShortcuts,
-    ImportExportDialog
+    ImportExportDialog,
+    LayoutModeIndicator
   },
   emits: [
     'menu-action',
@@ -545,6 +619,25 @@ export default {
       setPanelWidth
     } = usePanelState()
 
+    // Responsive layout
+    const {
+      layoutMode,
+      isMobile,
+      isTablet,
+      isDesktop,
+      isLarge,
+      shouldUseOverlay,
+      canResizePanel,
+      getResponsivePanelWidth
+    } = useResponsiveLayout()
+
+    // Panel positioning
+    const {
+      registerPanel,
+      unregisterPanel,
+      getPanelPosition
+    } = usePanelPositioning()
+
     // UI state
     const activeMenu = ref(null)
     const activeTool = ref('select')
@@ -555,6 +648,14 @@ export default {
     const showScenePanel = ref(false)
     const showImportExportDialog = ref(false)
     const importExportMode = ref('export') // 'export' or 'import'
+
+    // Refs for trigger buttons
+    const materialButtonRef = ref(null)
+    const sceneButtonRef = ref(null)
+
+    // Refs for panel elements
+    const materialPanelRef = ref(null)
+    const scenePanelRef = ref(null)
 
     // Panel configuration
     const panels = computed(() => ({
@@ -978,6 +1079,72 @@ export default {
       }
     }
 
+    // Computed panel positions
+    const materialPanelStyle = computed(() => {
+      return getPanelPosition('material')
+    })
+
+    const scenePanelStyle = computed(() => {
+      return getPanelPosition('scene')
+    })
+
+    // Watch for material panel open/close and update position
+    watch(showMaterialPanel, async (isOpen) => {
+      if (isOpen) {
+        await nextTick()
+        await nextTick() // Extra tick to ensure panel is fully rendered
+        if (materialButtonRef.value && materialPanelRef.value) {
+          registerPanel('material', materialButtonRef.value, materialPanelRef.value, 'bottom-start')
+        }
+      } else {
+        unregisterPanel('material')
+      }
+    })
+
+    // Watch for scene panel open/close and update position
+    watch(showScenePanel, async (isOpen) => {
+      if (isOpen) {
+        await nextTick()
+        await nextTick() // Extra tick to ensure panel is fully rendered
+        if (sceneButtonRef.value && scenePanelRef.value) {
+          registerPanel('scene', sceneButtonRef.value, scenePanelRef.value, 'bottom-start')
+        }
+      } else {
+        unregisterPanel('scene')
+      }
+    })
+
+    // Watch for layout mode changes and adjust panels accordingly
+    watch(layoutMode, (newMode) => {
+      console.log('Layout mode changed to:', newMode)
+
+      // On mobile/tablet, auto-hide panels when switching modes
+      if (isMobile.value || isTablet.value) {
+        // Close floating panels on small screens
+        if (showMaterialPanel.value || showScenePanel.value) {
+          showMaterialPanel.value = false
+          showScenePanel.value = false
+        }
+
+        // Close menus
+        closeAllMenus()
+      }
+
+      // Adjust panel widths to fit new screen size
+      if (panelState.value.right.visible) {
+        const newWidth = getResponsivePanelWidth('right', panelState.value.right.width)
+        setPanelWidth('right', newWidth)
+      }
+
+      // Re-register panels on layout change
+      if (showMaterialPanel.value && materialButtonRef.value && materialPanelRef.value) {
+        nextTick(() => registerPanel('material', materialButtonRef.value, materialPanelRef.value, 'bottom-start'))
+      }
+      if (showScenePanel.value && sceneButtonRef.value && scenePanelRef.value) {
+        nextTick(() => registerPanel('scene', sceneButtonRef.value, scenePanelRef.value, 'bottom-start'))
+      }
+    })
+
     // Lifecycle
     onMounted(() => {
       document.addEventListener('keydown', handleKeydown)
@@ -1017,6 +1184,23 @@ export default {
       selectedCount,
       canUndo,
       canRedo,
+
+      // Responsive layout
+      layoutMode,
+      isMobile,
+      isTablet,
+      isDesktop,
+      isLarge,
+      shouldUseOverlay,
+      canResizePanel,
+
+      // Panel positioning
+      materialButtonRef,
+      sceneButtonRef,
+      materialPanelRef,
+      scenePanelRef,
+      materialPanelStyle,
+      scenePanelStyle,
 
       // Methods
       navigateTo,
@@ -1157,6 +1341,58 @@ export default {
 
 .status-indicator.active {
   background-color: #28a745;
+}
+
+/* Mobile menu toggle */
+.mobile-menu-toggle {
+  background: none;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 3px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  margin-right: 8px;
+}
+
+.mobile-menu-toggle:hover {
+  background-color: #3e3e42;
+}
+
+.hamburger-icon {
+  display: block;
+  line-height: 1;
+}
+
+/* Mobile dropdown menu */
+.mobile-dropdown {
+  position: fixed;
+  top: 32px;
+  left: 0;
+  right: 0;
+  background-color: #2d2d30;
+  border-bottom: 1px solid #3e3e42;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  padding: 8px 0;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Toolbar styles */
@@ -1594,19 +1830,303 @@ export default {
 }
 
 
-/* Responsive design */
-@media (max-width: 768px) {
-  .main-menu {
+/* ============================================
+   RESPONSIVE DESIGN & ADAPTIVE LAYOUT
+   ============================================ */
+
+/* Panel Backdrop for Overlay Mode */
+.panel-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 998;
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Overlay Panel Styles */
+.side-panel.overlay-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  z-index: 999;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  animation: slideInFromRight 0.3s ease-out;
+}
+
+.side-panel.overlay-panel.right-panel {
+  right: 0;
+}
+
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Docked Panel Styles */
+.side-panel.docked-panel {
+  position: relative;
+  transition: width 0.2s ease;
+}
+
+/* Mobile Layout (< 768px) */
+@media (max-width: 767px) {
+  .main-layout.is-mobile {
+    font-size: 13px;
+  }
+
+  /* Compact menu bar */
+  .menu-bar.compact .main-menu {
     display: none;
   }
 
-  .side-panel {
-    min-width: 150px;
-    max-width: 250px;
+  .menu-bar.compact .app-name {
+    font-size: 14px;
+  }
+
+  /* Compact toolbar */
+  .main-toolbar {
+    height: 48px;
+    padding: 0 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .toolbar-section {
+    gap: 4px;
   }
 
   .tool-group {
-    flex-wrap: wrap;
+    gap: 2px;
+    padding: 0 2px;
+  }
+
+  .tool-button {
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
+  }
+
+  .toolbar-divider {
+    margin: 0 2px;
+  }
+
+  /* Hide button text on mobile */
+  .material-button .button-text {
+    display: none;
+  }
+
+  .material-button {
+    padding: 0 8px;
+    min-width: 38px;
+  }
+
+  /* Force panels to overlay mode */
+  .side-panel {
+    position: fixed !important;
+    z-index: 999;
+    min-width: 280px;
+    max-width: 90vw;
+    top: 74px; /* menu bar + toolbar height */
+    bottom: 24px; /* status bar height */
+  }
+
+  .side-panel.right-panel {
+    right: 0;
+  }
+
+  /* Floating panels positioning on mobile */
+  .floating-material-panel,
+  .floating-scene-panel {
+    position: fixed;
+    max-width: calc(100vw - 20px);
+    min-width: 280px;
+    left: 10px !important;
+    right: 10px !important;
+    width: auto;
+  }
+
+  /* Viewport adjustments */
+  .viewport-header {
+    height: 36px;
+  }
+
+  .viewport-controls {
+    gap: 2px;
+  }
+
+  .control-button {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+}
+
+/* Tablet Layout (768px - 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .main-layout.is-tablet {
+    font-size: 13px;
+  }
+
+  /* Compact menu */
+  .menu-bar.compact .main-menu {
+    gap: 0;
+  }
+
+  .menu-bar.compact .menu-item {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+
+  /* Toolbar adjustments */
+  .main-toolbar {
+    padding: 0 10px;
+  }
+
+  .tool-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  /* Panels can be overlay or docked */
+  .side-panel.overlay-panel {
+    position: fixed;
+    z-index: 999;
+    top: 74px;
+    bottom: 24px;
+    max-width: 400px;
+  }
+
+  .side-panel.docked-panel {
+    min-width: 200px;
+    max-width: 350px;
+  }
+
+  /* Floating panels on tablet - use dynamic positioning */
+  .floating-material-panel,
+  .floating-scene-panel {
+    max-width: 320px;
+    min-width: 280px;
+  }
+}
+
+/* Desktop Layout (1024px - 1439px) */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .main-layout.is-desktop {
+    font-size: 14px;
+  }
+
+  .side-panel {
+    min-width: 200px;
+    max-width: 450px;
+  }
+}
+
+/* Large Desktop Layout (1440px+) */
+@media (min-width: 1440px) {
+  .main-layout.layout-mode-large {
+    font-size: 14px;
+  }
+
+  .side-panel {
+    min-width: 250px;
+    max-width: 600px;
+  }
+
+  /* Show more toolbar labels */
+  .material-button .button-text {
+    display: inline;
+  }
+}
+
+/* Extra responsive adjustments */
+@media (max-width: 480px) {
+  /* Very small screens */
+  .main-toolbar {
+    height: 52px;
+  }
+
+  .tool-button {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .app-logo .app-name {
+    display: none; /* Hide app name on very small screens */
+  }
+
+  .status-info {
+    font-size: 11px;
+  }
+}
+
+/* Landscape mode adjustments for mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+  .main-toolbar {
+    height: 38px;
+  }
+
+  .tool-button {
+    width: 32px;
+    height: 32px;
+  }
+
+  .menu-bar {
+    height: 28px;
+  }
+
+  .viewport-header {
+    height: 28px;
+  }
+
+  .side-panel {
+    top: 66px;
+  }
+}
+
+/* Touch-friendly hit areas */
+@media (hover: none) and (pointer: coarse) {
+  .tool-button,
+  .control-button,
+  .menu-item,
+  .panel-close {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Print styles */
+@media print {
+  .menu-bar,
+  .main-toolbar,
+  .side-panel,
+  .status-bar,
+  .help-button {
+    display: none !important;
+  }
+
+  .viewport-area {
+    position: static;
+    width: 100%;
+    height: 100%;
   }
 }
 
@@ -1683,22 +2203,40 @@ export default {
 
 /* Material Panel Floating */
 .floating-material-panel {
-  position: absolute;
-  top: 60px;
-  right: 20px;
-  z-index: 100;
+  position: fixed;
+  z-index: 1000;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  animation: slideInRight 0.3s ease-out;
+  animation: slideInDown 0.3s ease-out;
+  max-width: 340px;
+  min-width: 300px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Scene Background Panel Floating */
 .floating-scene-panel {
-  position: absolute;
-  top: 60px;
-  right: 360px; /* Position to the left of material panel */
-  z-index: 100;
+  position: fixed;
+  z-index: 1000;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  animation: slideInRight 0.3s ease-out;
+  animation: slideInDown 0.3s ease-out;
+  max-width: 340px;
+  min-width: 300px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Animation for panels appearing below trigger */
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideInRight {
