@@ -1107,9 +1107,10 @@ export class ThreeView extends Observable {
         return
       }
 
-      // Replace current scene and camera
-      this.scene = restored.scene
-      this.camera = restored.camera
+      // CRITICAL: Mark Three.js objects as raw to prevent Vue reactivity proxies
+      // This prevents "read-only property" errors with modelViewMatrix, etc.
+      this.scene = markRaw(restored.scene)
+      this.camera = markRaw(restored.camera)
 
       // Update camera aspect ratio
       if (this.element) {
@@ -1277,7 +1278,7 @@ export class ThreeView extends Observable {
     })
 
     console.log(`📝 Registered texture for persistence: ${metadata.name} (${texture.uuid})`)
-    
+
     // Trigger auto-save after texture registration
     this._triggerAutoSave()
   }
@@ -1290,7 +1291,7 @@ export class ThreeView extends Observable {
   registerEnvironment(envData) {
     this._environmentData = envData
     console.log(`🌄 Registered environment for persistence:`, envData.kind)
-    
+
     // Trigger auto-save after environment change
     this._triggerAutoSave()
   }

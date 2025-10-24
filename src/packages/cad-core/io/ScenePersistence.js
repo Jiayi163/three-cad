@@ -10,6 +10,7 @@
  */
 
 import * as THREE from 'three'
+import { markRaw } from 'vue'
 import { db, isIndexedDBAvailable } from './PersistenceDB.js'
 import { isSilentMode } from './AutoSaveSettings.js'
 
@@ -248,7 +249,8 @@ export async function restoreScene(savedState, renderer) {
           texture.generateMipmaps = textureInfo.props.generateMipmaps
           texture.needsUpdate = true
 
-          textureMap.set(textureInfo.id, texture)
+          // Mark texture as raw to prevent Vue reactivity
+          textureMap.set(textureInfo.id, markRaw(texture))
         }
       } catch (err) {
         console.warn(`⚠️ Failed to restore texture ${textureInfo.name}:`, err)
@@ -259,6 +261,24 @@ export async function restoreScene(savedState, renderer) {
     const loader = new THREE.ObjectLoader()
     const scene = loader.parse(savedState.sceneJSON)
     console.log('  🎭 Scene restored from JSON')
+
+    // CRITICAL: Mark all Three.js objects as raw to prevent Vue reactivity
+    // This prevents proxy errors with read-only properties like modelViewMatrix
+    scene.traverse((object) => {
+      // Mark each object and its matrices as raw
+      if (object.matrix) object.matrix = markRaw(object.matrix)
+      if (object.matrixWorld) object.matrixWorld = markRaw(object.matrixWorld)
+      if (object.matrixWorldInverse) object.matrixWorldInverse = markRaw(object.matrixWorldInverse)
+      if (object.normalMatrix) object.normalMatrix = markRaw(object.normalMatrix)
+      if (object.geometry) object.geometry = markRaw(object.geometry)
+      if (object.material) {
+        if (Array.isArray(object.material)) {
+          object.material = object.material.map(m => markRaw(m))
+        } else {
+          object.material = markRaw(object.material)
+        }
+      }
+    })
 
     // 3. Rebind textures to materials
     scene.traverse((object) => {
@@ -289,6 +309,14 @@ export async function restoreScene(savedState, renderer) {
     camera.position.fromArray(savedState.camera.position)
     camera.rotation.fromArray(savedState.camera.rotation)
     camera.zoom = savedState.camera.zoom
+    
+    // Mark camera matrices as raw to prevent Vue reactivity
+    if (camera.matrix) camera.matrix = markRaw(camera.matrix)
+    if (camera.matrixWorld) camera.matrixWorld = markRaw(camera.matrixWorld)
+    if (camera.matrixWorldInverse) camera.matrixWorldInverse = markRaw(camera.matrixWorldInverse)
+    if (camera.projectionMatrix) camera.projectionMatrix = markRaw(camera.projectionMatrix)
+    if (camera.projectionMatrixInverse) camera.projectionMatrixInverse = markRaw(camera.projectionMatrixInverse)
+    
     console.log('  📷 Camera restored')
 
     // 5. Restore renderer settings
