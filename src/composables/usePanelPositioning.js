@@ -92,31 +92,37 @@ export function usePanelPositioning() {
 
     // If collision detected, try alternative placements
     if (hasCollision && collidingPanel) {
-      // Strategy 1: Try to place to the right of the colliding panel
+      // Strategy 1: Try to place to the right of the colliding panel (side by side)
       const rightOfOther = collidingPanel.right + horizontalGap
 
       // Check if there's enough space on the right
       if (rightOfOther + panelWidth <= window.innerWidth - 20) {
-        // Use this position
+        // Place to the right of the other panel (side by side)
         left = rightOfOther
         right = 'auto'
+        // Keep the same top position (aligned horizontally)
       } else {
-        // Strategy 2: Try bottom-end alignment (right-aligned to trigger)
-        right = window.innerWidth - triggerRect.right
-        left = 'auto'
+        // Strategy 2: Try to place to the left of the colliding panel
+        const leftOfOther = collidingPanel.left - panelWidth - horizontalGap
 
-        // Recalculate proposed rect with new position
-        const newProposedLeft = window.innerWidth - right - panelWidth
-        const newProposedRect = {
-          left: newProposedLeft,
-          top: top,
-          right: newProposedLeft + panelWidth,
-          bottom: top + panelHeight
-        }
-
-        // If still colliding with bottom-end, shift vertically below the other panel
-        if (rectsOverlap(newProposedRect, collidingPanel)) {
+        if (leftOfOther >= 20) {
+          // Place to the left of the other panel
+          left = leftOfOther
+          right = 'auto'
+          // Keep the same top position (aligned horizontally)
+        } else {
+          // Strategy 3: Only as last resort, shift down below the other panel
+          // But keep alignment to the original trigger button horizontally
           top = collidingPanel.bottom + gap
+
+          // Recalculate horizontal position to align with trigger
+          if (placement === 'bottom-start') {
+            left = triggerRect.left
+            right = 'auto'
+          } else if (placement === 'bottom-end') {
+            right = window.innerWidth - triggerRect.right
+            left = 'auto'
+          }
         }
       }
     }
@@ -135,12 +141,19 @@ export function usePanelPositioning() {
 
     // Check bottom boundary
     if (top + panelHeight > window.innerHeight - 20) {
-      // Try flipping to top
-      top = triggerRect.top - panelHeight - gap
-      // If still doesn't fit, place at bottom with max height
-      if (top < 20) {
-        top = 20
+      // Don't flip to top - instead, constrain the panel height
+      // Keep it below the trigger but limit the bottom
+      const availableHeight = window.innerHeight - top - 20
+
+      // If there's not enough space even below the trigger,
+      // keep it below but let CSS max-height handle scrolling
+      if (availableHeight < 200) {
+        // As a last resort if very little space, position it at a reasonable spot
+        // but still below the trigger
+        const minTop = triggerRect.bottom + gap
+        top = Math.max(minTop, 20)
       }
+      // Otherwise keep the calculated top position and let max-height in CSS handle overflow
     }
 
     return {
@@ -176,19 +189,10 @@ export function usePanelPositioning() {
     const position = calculatePosition(triggerEl, panelEl, placement, otherPanels)
     panelPositions.value[panelId] = position
 
-    // Recalculate positions of other open panels to avoid new collision
-    for (const { id: otherId, element: otherEl } of otherPanels) {
-      const otherTrigger = document.querySelector(`[data-panel-id="${otherId}"]`)
-      if (otherTrigger) {
-        // Get all panels except the one we're updating
-        const remainingPanels = Object.entries(panelElements.value)
-          .filter(([id, el]) => id !== otherId && activePanels.value.has(id) && el)
-          .map(([id, el]) => ({ id, element: el }))
-
-        const otherPosition = calculatePosition(otherTrigger, otherEl, placement, remainingPanels)
-        panelPositions.value[otherId] = otherPosition
-      }
-    }
+    // Don't automatically reposition other panels when a new one opens
+    // The collision avoidance logic in calculatePosition handles this by
+    // positioning the NEW panel to avoid existing panels, not the other way around
+    // This prevents existing panels from jumping around when new panels open
   }
 
   /**

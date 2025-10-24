@@ -9,6 +9,7 @@ import { CameraController } from './CameraController.js'
 import { VisualObject } from './VisualObject.js'
 import { ViewCube } from './ViewCube.js'
 import { SelectionOverlay } from './SelectionOverlay.js'
+import { saveStateDebounced, restoreScene, hasPersistedState, loadState } from '../cad-core/io/ScenePersistence.js'
 
 export class ThreeView extends Observable {
   constructor(document, name = 'default') {
@@ -75,6 +76,142 @@ export class ThreeView extends Observable {
   }
 
   /**
+   * Force recreate renderer with proper settings
+   * CRITICAL: Creates brand new canvas + WebGL context with alpha:false
+   */
+  recreateRenderer() {
+    console.log('🔄 FORCING COMPLETE RENDERER RECREATION...')
+
+    if (!this.element) {
+      console.error('❌ Cannot recreate renderer: no DOM element!')
+      return
+    }
+
+    // Dispose old renderer completely
+    if (this.renderer) {
+      const oldCanvas = this.renderer.domElement
+      const oldAlpha = this.renderer.getContext().getContextAttributes().alpha
+      console.log('🗑️ Disposing old renderer (alpha was:', oldAlpha, ')')
+
+      try {
+        this.renderer.forceContextLoss?.()
+      } catch (e) {
+        console.warn('Could not force context loss:', e)
+      }
+
+      try {
+        this.renderer.dispose()
+      } catch (e) {
+        console.warn('Could not dispose renderer:', e)
+      }
+
+      // CRITICAL: Remove old canvas completely from DOM
+      if (oldCanvas && oldCanvas.parentElement) {
+        oldCanvas.parentElement.removeChild(oldCanvas)
+        console.log('✅ Old canvas removed from DOM')
+      }
+    }
+
+    // CRITICAL: Create BRAND NEW canvas element
+    const newCanvas = document.createElement('canvas')
+    newCanvas.style.width = '100%'
+    newCanvas.style.height = '100%'
+    newCanvas.style.display = 'block'
+
+    console.log('✅ Created new canvas element')
+
+    // CRITICAL: Create WebGL context ourselves with alpha:false
+    const contextAttributes = {
+      alpha: false,              // CRITICAL: opaque canvas
+      antialias: this.settings.antialias,
+      premultipliedAlpha: false,
+      depth: true,
+      stencil: false,
+      preserveDrawingBuffer: false,
+      powerPreference: 'high-performance',
+      failIfMajorPerformanceCaveat: false
+    }
+
+    // Try WebGL2 first, fall back to WebGL1
+    let gl = newCanvas.getContext('webgl2', contextAttributes)
+    if (!gl) {
+      console.log('WebGL2 not available, trying WebGL1...')
+      gl = newCanvas.getContext('webgl', contextAttributes) ||
+           newCanvas.getContext('experimental-webgl', contextAttributes)
+    }
+
+    if (!gl) {
+      console.error('❌ Failed to create WebGL context!')
+      throw new Error('WebGL not supported')
+    }
+
+    // Verify context attributes BEFORE creating Three.js renderer
+    const preAttrs = gl.getContextAttributes()
+    console.log('🔍 WebGL context created with attributes:', {
+      alpha: preAttrs.alpha,
+      premultipliedAlpha: preAttrs.premultipliedAlpha,
+      antialias: preAttrs.antialias,
+      isWebGL2: gl instanceof WebGL2RenderingContext
+    })
+
+    if (preAttrs.alpha !== false) {
+      console.error('❌ CRITICAL: Context still has alpha:true even after explicit creation!')
+      console.error('This should never happen. Browser may be overriding our settings.')
+    }
+
+    // Create Three.js renderer using OUR pre-created context
+    const newRenderer = markRaw(new THREE.WebGLRenderer({
+      canvas: newCanvas,
+      context: gl  // CRITICAL: Use our opaque context
+    }))
+
+    // Configure renderer
+    newRenderer.setPixelRatio(window.devicePixelRatio)
+    newRenderer.shadowMap.enabled = this.settings.enableShadows
+    newRenderer.shadowMap.type = THREE.PCFSoftShadowMap
+    newRenderer.outputColorSpace = THREE.SRGBColorSpace
+    newRenderer.toneMapping = THREE.ACESFilmicToneMapping
+    newRenderer.toneMappingExposure = 1.0
+    newRenderer.setClearColor(0x000000, 1.0)
+    newRenderer.autoClear = true
+
+    this.renderer = newRenderer
+
+    // Add new canvas to DOM
+    this.element.appendChild(newCanvas)
+    newRenderer.setSize(this.element.clientWidth, this.element.clientHeight)
+
+    console.log('✅ New canvas added to DOM and sized')
+
+    // Verify FINAL context attributes
+    const finalGl = newRenderer.getContext()
+    const finalAttrs = finalGl.getContextAttributes()
+    console.log('✅ FINAL WebGL Context Attributes:', {
+      alpha: finalAttrs.alpha,
+      premultipliedAlpha: finalAttrs.premultipliedAlpha,
+      antialias: finalAttrs.antialias
+    })
+
+    if (finalAttrs.alpha === false) {
+      console.log('🎉 SUCCESS: Renderer has alpha:false - EXR backgrounds will work!')
+    } else {
+      console.error('❌ FAILED: Renderer STILL has alpha:true!')
+      console.error('Something is forcing alpha:true (browser, extension, or bug)')
+    }
+
+    // Rebind ViewCube if it exists
+    if (this.viewCube) {
+      // ViewCube has its own renderer, doesn't need rebinding
+      console.log('✅ ViewCube will continue working')
+    }
+
+    // Force a render
+    this.requestRender()
+
+    return newRenderer
+  }
+
+  /**
    * Initialize the Three.js scene and components
    */
   _initializeScene() {
@@ -109,13 +246,20 @@ export class ThreeView extends Observable {
       this.camera = markRaw(cameraObject)
 
       // Create renderer - use markRaw to prevent Vue reactivity
+      // CRITICAL: alpha:false so scene.background actually shows (not transparent canvas)
       this.renderer = markRaw(new THREE.WebGLRenderer({
         antialias: this.settings.antialias,
-        alpha: true
+        alpha: false,  // Changed from true - backgrounds need opaque canvas
+        premultipliedAlpha: false
       }))
       this.renderer.setPixelRatio(window.devicePixelRatio)
       this.renderer.shadowMap.enabled = this.settings.enableShadows
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
+
+      // Set proper color space for modern Three.js
+      this.renderer.outputColorSpace = THREE.SRGBColorSpace
+
+      console.log('✅ Renderer created with alpha:false for proper backgrounds')
 
       // Create camera controller
       this.cameraController = new CameraController(this)
@@ -907,6 +1051,175 @@ export class ThreeView extends Observable {
 
       // Update view cube scene clone
       this._updateViewCubeScene()
+    }
+  }
+
+  /**
+   * Save current scene state to IndexedDB (debounced)
+   * Auto-persists: scene geometry, materials, textures, environment, camera, UI
+   */
+  async saveSceneState() {
+    try {
+      // Collect texture metadata
+      const textureMetadata = []
+      this._textureRegistry = this._textureRegistry || new Map()
+
+      this.scene.traverse((object) => {
+        if (object.material) {
+          const materials = Array.isArray(object.material) ? object.material : [object.material]
+
+          for (const material of materials) {
+            if (material.map && !textureMetadata.find(t => t.id === material.map.uuid)) {
+              // Store texture ID in material userData for restoration
+              material.userData.textureId = material.map.uuid
+
+              const registryEntry = this._textureRegistry.get(material.map.uuid)
+
+              textureMetadata.push({
+                id: material.map.uuid,
+                name: registryEntry?.name || 'texture',
+                blob: registryEntry?.blob,
+                url: registryEntry?.url,
+                props: {
+                  wrapS: material.map.wrapS,
+                  wrapT: material.map.wrapT,
+                  repeat: material.map.repeat.toArray(),
+                  offset: material.map.offset.toArray(),
+                  rotation: material.map.rotation,
+                  colorSpace: material.map.colorSpace || 'SRGBColorSpace',
+                  flipY: material.map.flipY,
+                  generateMipmaps: material.map.generateMipmaps
+                }
+              })
+            }
+          }
+        }
+      })
+
+      // Collect environment metadata
+      const environment = {
+        kind: 'none'
+      }
+
+      if (this._environmentData) {
+        environment.kind = this._environmentData.kind || 'none'
+        environment.color = this._environmentData.color
+        environment.imageName = this._environmentData.imageName
+        environment.imageType = this._environmentData.imageType
+        environment.settings = this._environmentData.settings
+      }
+
+      // Save to IndexedDB (debounced to avoid excessive writes)
+      await saveStateDebounced({
+        scene: this.scene,
+        camera: this.camera,
+        renderer: this.renderer,
+        environment,
+        textures: textureMetadata,
+        ui: {
+          panels: this._uiPanelState || {},
+          layout: 'default'
+        }
+      })
+
+      console.log('💾 Scene state saved (debounced)')
+    } catch (error) {
+      console.error('❌ Failed to save scene state:', error)
+    }
+  }
+
+  /**
+   * Register a texture for persistence
+   * Call this when loading textures so they can be saved/restored
+   *
+   * @param {THREE.Texture} texture - Texture instance
+   * @param {Object} metadata - Texture metadata
+   * @param {string} metadata.name - Texture name
+   * @param {Blob} [metadata.blob] - Original blob (if user-imported)
+   * @param {string} [metadata.url] - URL (if from network)
+   */
+  registerTexture(texture, metadata) {
+    this._textureRegistry = this._textureRegistry || new Map()
+
+    this._textureRegistry.set(texture.uuid, {
+      name: metadata.name || 'texture',
+      blob: metadata.blob,
+      url: metadata.url
+    })
+
+    console.log(`📝 Registered texture for persistence: ${metadata.name} (${texture.uuid})`)
+  }
+
+  /**
+   * Register environment/background data for persistence
+   *
+   * @param {Object} envData - Environment metadata
+   */
+  registerEnvironment(envData) {
+    this._environmentData = envData
+    console.log(`🌄 Registered environment for persistence:`, envData.kind)
+  }
+
+  /**
+   * Restore scene from IndexedDB
+   * Called on app initialization to restore previous session
+   *
+   * @returns {Promise<boolean>} True if restoration successful
+   */
+  async restoreSceneState() {
+    try {
+      const hasState = await hasPersistedState()
+
+      if (!hasState) {
+        console.log('📭 No persisted scene state found')
+        return false
+      }
+
+      console.log('🔄 Restoring scene from IndexedDB...')
+
+      const savedState = await loadState()
+      if (!savedState) {
+        return false
+      }
+
+      const restored = await restoreScene(savedState, this.renderer)
+
+      if (!restored) {
+        return false
+      }
+
+      // Replace current scene
+      this.scene = restored.scene
+
+      // Replace camera
+      const oldCamera = this.camera
+      this.camera = restored.camera
+      this.camera.aspect = oldCamera.aspect
+      this.camera.updateProjectionMatrix()
+
+      // Update camera controller
+      if (this.cameraController) {
+        this.cameraController.camera = this.camera
+      }
+
+      // Store environment data
+      this._environmentData = restored.environment
+
+      // Store UI state
+      this._uiPanelState = restored.ui?.panels || {}
+
+      // Re-setup helpers (grid, axes)
+      this._setupHelpers()
+
+      // Request render
+      this.requestRender()
+
+      console.log('✅ Scene successfully restored from IndexedDB')
+      return true
+
+    } catch (error) {
+      console.error('❌ Failed to restore scene state:', error)
+      return false
     }
   }
 

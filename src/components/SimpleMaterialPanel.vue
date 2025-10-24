@@ -2,6 +2,7 @@
   <div class="simple-material-panel">
     <div class="panel-header">
       <h3>Material Selection</h3>
+      <button class="close-button" @click="closePanel" title="Close panel">×</button>
     </div>
 
     <div class="panel-content">
@@ -51,6 +52,65 @@
             </div>
           </div>
         </div>
+
+        <!-- Texture Repeat Controls -->
+        <div v-if="selectedTexture" class="texture-controls">
+          <h5>Texture Repeat</h5>
+
+          <div class="control-group">
+            <label for="repeat-x">Horizontal (U):</label>
+            <div class="control-input-group">
+              <input
+                id="repeat-x"
+                type="range"
+                min="0.1"
+                max="10"
+                step="0.1"
+                v-model.number="textureRepeatX"
+                @input="updateTextureRepeat"
+                class="slider"
+              >
+              <input
+                type="number"
+                min="0.1"
+                max="20"
+                step="0.1"
+                v-model.number="textureRepeatX"
+                @input="updateTextureRepeat"
+                class="number-input"
+              >
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label for="repeat-y">Vertical (V):</label>
+            <div class="control-input-group">
+              <input
+                id="repeat-y"
+                type="range"
+                min="0.1"
+                max="10"
+                step="0.1"
+                v-model.number="textureRepeatY"
+                @input="updateTextureRepeat"
+                class="slider"
+              >
+              <input
+                type="number"
+                min="0.1"
+                max="20"
+                step="0.1"
+                v-model.number="textureRepeatY"
+                @input="updateTextureRepeat"
+                class="number-input"
+              >
+            </div>
+          </div>
+
+          <button @click="resetTextureRepeat" class="reset-btn">
+            Reset to 1×1
+          </button>
+        </div>
       </div>
 
       <!-- Apply Button -->
@@ -78,13 +138,19 @@ import * as THREE from 'three'
 
 export default {
   name: 'SimpleMaterialPanel',
-  setup() {
+  emits: ['close'],
+  setup(props, { emit }) {
     const appStore = useApplicationStore()
     const selectedMaterial = ref('standard')
     const selectedTexture = ref(null)
     const texturePreviewUrl = ref(null)
     const textureFileInput = ref(null)
     const isDragOver = ref(false)
+
+    // Texture repeat controls
+    const textureRepeatX = ref(1)
+    const textureRepeatY = ref(1)
+    const currentTextureRef = ref(null) // Store reference to currently applied texture
 
     // Basic materials similar to Three.js defaults
     const basicMaterials = [
@@ -160,9 +226,55 @@ export default {
       selectedTexture.value = null
       texturePreviewUrl.value = null
       selectedMaterial.value = 'standard'
+      currentTextureRef.value = null
+      textureRepeatX.value = 1
+      textureRepeatY.value = 1
       if (textureFileInput.value) {
         textureFileInput.value.value = ''
       }
+    }
+
+    /**
+     * Update texture repeat on currently applied materials
+     * This is called when sliders/inputs change
+     */
+    const updateTextureRepeat = () => {
+      if (!hasSelection.value) return
+
+      const selectedNodes = appStore.activeDocument.selectedNodes
+
+      for (const node of selectedNodes) {
+        const visualObject = node.visualObject
+        if (visualObject && visualObject.object3D && visualObject.object3D.material) {
+          const material = visualObject.object3D.material
+
+          // Check if material has a texture map
+          if (material.map) {
+            material.map.wrapS = THREE.RepeatWrapping
+            material.map.wrapT = THREE.RepeatWrapping
+            material.map.repeat.set(textureRepeatX.value, textureRepeatY.value)
+            material.map.needsUpdate = true
+            material.needsUpdate = true
+          }
+        }
+      }
+
+      console.log(`Updated texture repeat to ${textureRepeatX.value} × ${textureRepeatY.value}`)
+
+      // Auto-save scene state after texture repeat changes (debounced)
+      const threeView = appStore.activeDocument?.views?.get?.('default')
+      if (threeView && typeof threeView.saveSceneState === 'function') {
+        threeView.saveSceneState()
+      }
+    }
+
+    /**
+     * Reset texture repeat to default 1×1
+     */
+    const resetTextureRepeat = () => {
+      textureRepeatX.value = 1
+      textureRepeatY.value = 1
+      updateTextureRepeat()
     }
 
     const applyMaterial = async () => {
@@ -220,13 +332,26 @@ export default {
 
                 texture.wrapS = THREE.RepeatWrapping
                 texture.wrapT = THREE.RepeatWrapping
-                texture.repeat.set(2, 2)
+                texture.repeat.set(textureRepeatX.value, textureRepeatY.value)
+
+                // Store texture reference for real-time updates
+                currentTextureRef.value = texture
 
                 material = new THREE.MeshStandardMaterial({
                   map: texture,
                   metalness: 0.2,
                   roughness: 0.6
                 })
+
+                // Register texture for persistence (if ThreeView available)
+                const threeView = appStore.activeDocument?.views?.get?.('default')
+                if (threeView && typeof threeView.registerTexture === 'function') {
+                  threeView.registerTexture(texture, {
+                    name: selectedTexture.value.name,
+                    blob: selectedTexture.value, // Store the original File/Blob
+                    url: texturePreviewUrl.value
+                  })
+                }
 
                 console.log(`✅ Applied texture ${selectedTexture.value.name} to ${node.name}`)
               } catch (error) {
@@ -335,10 +460,23 @@ export default {
         console.log('✅ Material/Texture applied successfully to all selected objects!')
         // Success notification removed - silent success
 
+        // Auto-save scene state after material changes
+        const threeView = appStore.activeDocument?.views?.get?.('default')
+        if (threeView && typeof threeView.saveSceneState === 'function') {
+          threeView.saveSceneState()
+        }
+
       } catch (error) {
         console.error('❌ Failed to apply material:', error)
         alert('Failed to apply material: ' + error.message)
       }
+    }
+
+    /**
+     * Close the panel
+     */
+    const closePanel = () => {
+      emit('close')
     }
 
     return {
@@ -349,13 +487,18 @@ export default {
       textureFileInput,
       isDragOver,
       hasSelection,
+      textureRepeatX,
+      textureRepeatY,
       selectMaterial,
       getMaterialName,
       handleImportClick,
       handleFileSelect,
       handleFileDrop,
       clearTexture,
-      applyMaterial
+      updateTextureRepeat,
+      resetTextureRepeat,
+      applyMaterial,
+      closePanel
     }
   }
 }
@@ -377,6 +520,9 @@ export default {
 }
 
 .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   border-bottom: 2px solid #3498db;
   padding-bottom: 12px;
   margin-bottom: 16px;
@@ -387,6 +533,33 @@ export default {
   font-size: 16px;
   font-weight: 600;
   color: #ecf0f1;
+}
+
+.close-button {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #bdc3c7;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.close-button:hover {
+  background: rgba(231, 76, 60, 0.2);
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.close-button:active {
+  transform: scale(0.95);
 }
 
 .panel-content {
@@ -619,6 +792,128 @@ export default {
 .hint-text.success {
   color: #2ecc71;
   font-weight: 500;
+}
+
+/* Texture Controls */
+.texture-controls {
+  margin-top: 16px;
+  padding: 12px;
+  background: #1a1a1a;
+  border-radius: 6px;
+  border: 1px solid #3a3a3a;
+}
+
+.texture-controls h5 {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #ecf0f1;
+  font-weight: 500;
+}
+
+.control-group {
+  margin-bottom: 12px;
+}
+
+.control-group:last-of-type {
+  margin-bottom: 16px;
+}
+
+.control-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #bdc3c7;
+}
+
+.control-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.slider {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: #3a3a3a;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #3498db;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  background: #5dade2;
+  transform: scale(1.1);
+}
+
+.slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #3498db;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.slider::-moz-range-thumb:hover {
+  background: #5dade2;
+  transform: scale(1.1);
+}
+
+.number-input {
+  width: 60px;
+  padding: 4px 8px;
+  background: #2c2c2c;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  color: #ecf0f1;
+  font-size: 12px;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.number-input:focus {
+  border-color: #3498db;
+}
+
+.number-input::-webkit-inner-spin-button,
+.number-input::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+.reset-btn {
+  width: 100%;
+  padding: 6px;
+  background: #34495e;
+  color: #ecf0f1;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reset-btn:hover {
+  background: #465a6d;
+}
+
+.reset-btn:active {
+  transform: translateY(1px);
 }
 
 </style>

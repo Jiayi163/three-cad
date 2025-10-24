@@ -51,7 +51,7 @@ export class ViewCube {
     this.canvas.style.right = `${margin}px`
     this.canvas.style.width = `${size}px`
     this.canvas.style.height = `${size}px`
-    this.canvas.style.zIndex = '9999'
+    this.canvas.style.zIndex = '40' // Lower z-index to allow panels to overlay (z-40 in our elevation scale)
     this.canvas.style.pointerEvents = 'auto' // Enable interaction
     this.canvas.style.borderRadius = '8px'
     this.canvas.style.border = '2px solid rgba(255, 255, 255, 0.2)'
@@ -547,6 +547,17 @@ export class ViewCube {
   setVisible(visible) {
     if (this.canvas) {
       this.canvas.style.display = visible ? 'block' : 'none'
+    }
+  }
+
+  /**
+   * Disable/enable pointer events on the legend (e.g., when panels are open)
+   * @param {boolean} disabled - Whether to disable pointer events
+   */
+  setPointerEventsDisabled(disabled) {
+    if (this.canvas) {
+      this.canvas.style.pointerEvents = disabled ? 'none' : 'auto'
+      this.canvas.style.opacity = disabled ? '0.7' : '1'
     }
   }
 }

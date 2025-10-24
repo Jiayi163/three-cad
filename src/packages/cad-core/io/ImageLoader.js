@@ -15,12 +15,36 @@ export class ImageLoader {
   static SUPPORTED_FORMATS = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
   /**
+   * Supported HDR formats (by file extension)
+   */
+  static HDR_FORMATS = ['exr', 'hdr'];
+
+  /**
    * Validate if file is a supported image format
    * @param {File} file - File to validate
    * @returns {boolean}
    */
   static isValidImageFile(file) {
-    return file instanceof File && this.SUPPORTED_FORMATS.includes(file.type);
+    if (!file instanceof File) return false;
+
+    // Check standard image MIME types
+    if (this.SUPPORTED_FORMATS.includes(file.type)) {
+      return true;
+    }
+
+    // Check HDR formats by extension (EXR files may not have proper MIME type)
+    const extension = this.getFileExtension(file.name);
+    return this.HDR_FORMATS.includes(extension);
+  }
+
+  /**
+   * Check if file is an HDR/EXR format
+   * @param {File} file - File to check
+   * @returns {boolean}
+   */
+  static isHDRFile(file) {
+    const extension = this.getFileExtension(file.name);
+    return this.HDR_FORMATS.includes(extension);
   }
 
   /**
@@ -30,7 +54,7 @@ export class ImageLoader {
    */
   static async loadImageAsDataURL(file) {
     if (!this.isValidImageFile(file)) {
-      throw new Error(`Unsupported image format: ${file.type}`);
+      throw new Error(`Unsupported image format: ${file.type || file.name}`);
     }
 
     return new Promise((resolve, reject) => {
@@ -45,6 +69,31 @@ export class ImageLoader {
       };
 
       reader.readAsDataURL(file);
+    });
+  }
+
+  /**
+   * Load HDR/EXR file as ArrayBuffer for Three.js loaders
+   * @param {File} file - HDR/EXR file to load
+   * @returns {Promise<ArrayBuffer>} Array buffer of file data
+   */
+  static async loadHDRAsArrayBuffer(file) {
+    if (!this.isHDRFile(file)) {
+      throw new Error(`File is not an HDR format: ${file.name}`);
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = (event) => {
+        resolve(event.target.result);
+      };
+
+      reader.onerror = () => {
+        reject(new Error('Failed to read HDR file'));
+      };
+
+      reader.readAsArrayBuffer(file);
     });
   }
 

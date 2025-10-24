@@ -91,6 +91,7 @@
         </nav>
       </div>
       <div class="menu-bar-right">
+        <PersistenceIndicator @menu-toggle="handlePersistenceMenuToggle" />
         <div class="status-info">
           <span class="status-indicator" :class="{ active: appStore.isInitialized && !appStore.isLoading }"></span>
           <span class="status-text">{{ appStore.isInitialized && !appStore.isLoading ? 'Ready' : 'Loading...' }}</span>
@@ -378,7 +379,7 @@
           :style="materialPanelStyle"
           data-panel="material"
         >
-          <SimpleMaterialPanel />
+          <SimpleMaterialPanel @close="showMaterialPanel = false" />
         </div>
 
         <!-- Scene Background Panel (Floating) -->
@@ -390,7 +391,7 @@
           :style="scenePanelStyle"
           data-panel="scene"
         >
-          <SceneBackgroundPanel />
+          <SceneBackgroundPanel @close="showScenePanel = false" />
         </div>
 
         <div class="viewport-header">
@@ -589,6 +590,7 @@ import SceneBackgroundPanel from '@/components/ui/SceneBackgroundPanel.vue'
 import KeyboardShortcuts from '@/components/ui/KeyboardShortcuts.vue'
 import ImportExportDialog from '@/packages/cad-ui/components/ImportExportDialog.vue'
 import LayoutModeIndicator from '@/components/ui/LayoutModeIndicator.vue'
+import PersistenceIndicator from '@/components/ui/PersistenceIndicator.vue'
 
 export default {
   name: 'MainLayout',
@@ -601,7 +603,8 @@ export default {
     SceneBackgroundPanel,
     KeyboardShortcuts,
     ImportExportDialog,
-    LayoutModeIndicator
+    LayoutModeIndicator,
+    PersistenceIndicator
   },
   emits: [
     'menu-action',
@@ -646,6 +649,7 @@ export default {
     const showViewportControls = ref(false)
     const showMaterialPanel = ref(false)
     const showScenePanel = ref(false)
+    const showPersistenceMenu = ref(false)
     const showImportExportDialog = ref(false)
     const importExportMode = ref('export') // 'export' or 'import'
 
@@ -1145,11 +1149,39 @@ export default {
       }
     })
 
+    /**
+     * Handle persistence menu toggle event
+     */
+    const handlePersistenceMenuToggle = (isOpen) => {
+      showPersistenceMenu.value = isOpen
+    }
+
+    /**
+     * Update ViewCube legend pointer events based on panel visibility
+     * Disable legend when any dropdown panel is open to prevent blocking interactions
+     */
+    const updateLegendPointerEvents = () => {
+      const anyPanelOpen = showMaterialPanel.value || showScenePanel.value || showPersistenceMenu.value
+
+      // Get ThreeView instance which has the ViewCube
+      const threeView = appStore.activeDocument?.views?.get?.('default')
+      if (threeView && threeView.viewCube && typeof threeView.viewCube.setPointerEventsDisabled === 'function') {
+        threeView.viewCube.setPointerEventsDisabled(anyPanelOpen)
+      }
+    }
+
+    // Watch for panel state changes and update legend accordingly
+    watch([showMaterialPanel, showScenePanel, showPersistenceMenu], () => {
+      updateLegendPointerEvents()
+    })
+
     // Lifecycle
     onMounted(() => {
       document.addEventListener('keydown', handleKeydown)
       document.addEventListener('contextmenu', showContextMenu)
       document.addEventListener('click', hideContextMenu)
+      // Update legend pointer events on mount
+      updateLegendPointerEvents()
     })
 
     onUnmounted(() => {
@@ -1213,6 +1245,7 @@ export default {
       handleExportComplete,
       handleImportComplete,
       handleImportExportError,
+      handlePersistenceMenuToggle,
       toggleWireframe,
       toggleGrid,
       toggleAxes,
@@ -2201,10 +2234,18 @@ export default {
   flex-direction: column;
 }
 
+/* Z-Index Elevation Scale:
+ * --z-base: 0       (default)
+ * --z-legend: 40    (ViewCube/legend in top-right)
+ * --z-dropdown: 50  (Material/Scene/Persistence panels)
+ * --z-modal: 80     (dialogs)
+ * --z-toast: 100    (notifications)
+ */
+
 /* Material Panel Floating */
 .floating-material-panel {
   position: fixed;
-  z-index: 1000;
+  z-index: 50; /* Above legend (40) */
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   animation: slideInDown 0.3s ease-out;
   max-width: 340px;
@@ -2212,12 +2253,13 @@ export default {
   max-height: calc(100vh - 120px);
   overflow-y: auto;
   overflow-x: hidden;
+  pointer-events: auto;
 }
 
 /* Scene Background Panel Floating */
 .floating-scene-panel {
   position: fixed;
-  z-index: 1000;
+  z-index: 50; /* Above legend (40) */
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   animation: slideInDown 0.3s ease-out;
   max-width: 340px;
@@ -2225,6 +2267,7 @@ export default {
   max-height: calc(100vh - 120px);
   overflow-y: auto;
   overflow-x: hidden;
+  pointer-events: auto;
 }
 
 /* Animation for panels appearing below trigger */
