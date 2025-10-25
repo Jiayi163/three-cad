@@ -332,26 +332,73 @@ export class ThreeView extends Observable {
   _setupHelpers() {
     if (this.settings.showGrid) {
       const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x333333)
+      gridHelper.name = 'AppGrid'
       // Make grid non-interactive (not selectable, no raycasting)
       gridHelper.layers.set(this.LAYER_NON_INTERACTIVE)
       gridHelper.raycast = () => {} // Completely disable raycasting
+      gridHelper.visible = true
+      gridHelper.frustumCulled = false // Always render, don't cull
       this.helpers.add(gridHelper)
     }
 
     if (this.settings.showAxes) {
       const axesHelper = new THREE.AxesHelper(5)
+      axesHelper.name = 'AppAxes'
       // Make axes non-interactive (not selectable, no raycasting)
       axesHelper.layers.set(this.LAYER_NON_INTERACTIVE)
       axesHelper.raycast = () => {} // Completely disable raycasting
+      axesHelper.visible = true
+      axesHelper.frustumCulled = false // Always render, don't cull
       this.helpers.add(axesHelper)
     }
 
     // Make the entire helpers group non-interactive
     this.helpers.layers.set(this.LAYER_NON_INTERACTIVE)
+    this.helpers.visible = true
+    this.helpers.frustumCulled = false
     this.helpers.traverse((child) => {
       child.layers.set(this.LAYER_NON_INTERACTIVE)
       child.raycast = () => {} // Disable raycasting on all helper children
+      child.visible = true
+      child.frustumCulled = false
     })
+  }
+
+  /**
+   * Ensure helpers (grid, axes) are visible and on correct layer
+   * Call after scene restore to fix any layer/visibility issues
+   */
+  _ensureHelpersVisible() {
+    // Ensure camera can see all layers
+    if (this.camera) {
+      this.camera.layers.enableAll()
+      console.log(`  👁️ Camera layers enabled: mask=${this.camera.layers.mask}`)
+    }
+
+    // Ensure helpers group is visible and on scene
+    if (this.helpers) {
+      this.helpers.visible = true
+      this.helpers.layers.set(this.LAYER_NON_INTERACTIVE)
+      this.helpers.frustumCulled = false
+
+      // If helpers got nested under something, move them directly to scene
+      if (this.helpers.parent !== this.scene) {
+        this.scene.add(this.helpers)
+        console.log(`  🔧 Moved helpers group to scene root`)
+      }
+
+      // Ensure each helper child is visible
+      this.helpers.traverse((child) => {
+        child.visible = true
+        child.layers.set(this.LAYER_NON_INTERACTIVE)
+        child.frustumCulled = false
+        child.raycast = () => {} // Keep non-interactive
+      })
+
+      console.log(`  ✅ Helpers ensured visible: ${this.helpers.children.length} children`)
+      console.log(`     Grid: ${this.helpers.getObjectByName('AppGrid') ? 'found' : 'missing'}`)
+      console.log(`     Axes: ${this.helpers.getObjectByName('AppAxes') ? 'found' : 'missing'}`)
+    }
   }
 
   /**
@@ -900,6 +947,18 @@ export class ThreeView extends Observable {
     if (!this.renderer || !this.scene || !this.camera) return
 
     try {
+      // DIAGNOSTIC: Detect scene reference changes mid-flight
+      if (typeof window !== 'undefined') {
+        if (!window.__lastSceneId) {
+          window.__lastSceneId = this.scene.id
+          console.log(`🎬 First render with scene ID: ${this.scene.id}`)
+        } else if (window.__lastSceneId !== this.scene.id) {
+          console.warn(`⚠️ Scene switched mid-flight: ${window.__lastSceneId} → ${this.scene.id}`)
+          console.warn(`   Scene children count: ${this.scene.children.length}`)
+          window.__lastSceneId = this.scene.id
+        }
+      }
+
       // Ensure camera matrix is updated
       this.camera.updateMatrixWorld()
 
@@ -1107,10 +1166,20 @@ export class ThreeView extends Observable {
         return
       }
 
+      // CRITICAL FIX: Store old scene ID to detect reference changes
+      const oldSceneId = this.scene?.id
+
       // CRITICAL: Mark Three.js objects as raw to prevent Vue reactivity proxies
       // This prevents "read-only property" errors with modelViewMatrix, etc.
       this.scene = markRaw(restored.scene)
       this.camera = markRaw(restored.camera)
+
+      // Log scene ID changes to detect mismatch
+      console.log(`  🔄 Scene reference updated: ${oldSceneId} → ${this.scene.id}`)
+      console.log(`  📦 Restored scene with ${this.scene.children.length} objects`)
+      this.scene.children.forEach((child, index) => {
+        console.log(`    [${index}] ${child.type} (${child.name || 'unnamed'}) [layer: ${child.layers.mask}]`)
+      })
 
       // Update camera aspect ratio
       if (this.element) {
@@ -1118,6 +1187,38 @@ export class ThreeView extends Observable {
         const height = this.element.clientHeight
         this.camera.aspect = width / height
         this.camera.updateProjectionMatrix()
+      }
+
+      // Re-add helpers (grid, axes) to the restored scene
+      if (this.helpers) {
+        this.scene.add(this.helpers)
+        console.log(`  🔧 Re-added helpers to scene`)
+      } else {
+        console.warn('⚠️ No helpers group found!')
+      }
+
+      // Re-add overlays group as well
+      if (this.overlays) {
+        this.scene.add(this.overlays)
+      }
+
+      // CRITICAL: Ensure helpers are visible with correct layers
+      this._ensureHelpersVisible()
+
+      console.log(`  ✅ Final scene has ${this.scene.children.length} total objects`)
+      console.log(`  ✅ Renderer will draw scene ID: ${this.scene.id}`)
+
+      // Hard assertions to catch reference mismatches
+      console.log(`  🔍 Verification:`)
+      console.log(`     threeView.scene.id: ${this.scene.id}`)
+      console.log(`     Camera layers mask: ${this.camera.layers.mask}`)
+      if (this.scene.getObjectByName('AppGrid')) {
+        const grid = this.scene.getObjectByName('AppGrid')
+        console.log(`     Grid layer: ${grid.layers.mask}, visible: ${grid.visible}, parent: ${grid.parent?.id}`)
+      }
+      if (this.scene.getObjectByName('AppAxes')) {
+        const axes = this.scene.getObjectByName('AppAxes')
+        console.log(`     Axes layer: ${axes.layers.mask}, visible: ${axes.visible}, parent: ${axes.parent?.id}`)
       }
 
       // Restore environment/background
@@ -1150,17 +1251,21 @@ export class ThreeView extends Observable {
         this._environmentData = restored.environment
       }
 
-      // Request render
-      this.requestRender()
+      // CRITICAL: Force immediate render to show restored scene
+      this.needsRender = true
+      this._render() // Force immediate render, don't wait for RAF
 
-      if (!isSilentMode()) {
-        console.log('✅ Scene auto-restored successfully')
-      }
+      console.log('✅ Auto-restore completed successfully')
+      console.log(`   Current scene ID being rendered: ${this.scene.id}`)
 
     } catch (error) {
       console.error('❌ Auto-restore failed:', error)
     } finally {
-      this._isRestoringState = false
+      // Wait a bit before clearing the flag to ensure no saves during stabilization
+      setTimeout(() => {
+        this._isRestoringState = false
+        console.log('🔓 Restore complete - auto-save re-enabled')
+      }, 1000)
     }
   }
 
@@ -1237,6 +1342,35 @@ export class ThreeView extends Observable {
         environment.settings = this._environmentData.settings
       }
 
+      // Temporarily remove helpers and overlays before saving
+      // (we'll recreate them on restore)
+      const helpersWasInScene = this.scene.children.includes(this.helpers)
+      const overlaysWasInScene = this.scene.children.includes(this.overlays)
+
+      if (helpersWasInScene) this.scene.remove(this.helpers)
+      if (overlaysWasInScene) this.scene.remove(this.overlays)
+
+      // Log what's being saved - detailed traversal
+      if (!isSilentMode()) {
+        const allObjects = []
+        this.scene.traverse((obj) => {
+          if (obj !== this.scene) { // Don't include scene itself
+            allObjects.push(obj)
+          }
+        })
+
+        console.log(`💾 Saving scene with ${this.scene.children.length} direct children (excluding helpers/overlays)`)
+        console.log(`   Total objects in scene tree: ${allObjects.length}`)
+
+        this.scene.children.forEach((child, index) => {
+          const childCount = []
+          child.traverse((obj) => {
+            if (obj !== child) childCount.push(obj)
+          })
+          console.log(`  [${index}] ${child.type} "${child.name || 'unnamed'}" (${childCount.length} descendants)`)
+        })
+      }
+
       // Save to IndexedDB (debounced to avoid excessive writes)
       await saveStateDebounced({
         scene: this.scene,
@@ -1249,6 +1383,10 @@ export class ThreeView extends Observable {
           layout: 'default'
         }
       })
+
+      // Restore helpers and overlays immediately after save
+      if (helpersWasInScene) this.scene.add(this.helpers)
+      if (overlaysWasInScene) this.scene.add(this.overlays)
 
       if (!isSilentMode()) {
         console.log('💾 Scene state auto-saved')
@@ -1344,8 +1482,13 @@ export class ThreeView extends Observable {
       // Store UI state
       this._uiPanelState = restored.ui?.panels || {}
 
-      // Re-setup helpers (grid, axes)
-      this._setupHelpers()
+      // Re-add helpers and overlays to the restored scene
+      if (this.helpers) {
+        this.scene.add(this.helpers)
+      }
+      if (this.overlays) {
+        this.scene.add(this.overlays)
+      }
 
       // Request render
       this.requestRender()

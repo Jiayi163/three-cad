@@ -263,19 +263,35 @@ export async function restoreScene(savedState, renderer) {
     console.log('  🎭 Scene restored from JSON')
 
     // CRITICAL: Mark all Three.js objects as raw to prevent Vue reactivity
-    // This prevents proxy errors with read-only properties like modelViewMatrix
+    // This prevents proxy errors with read-only properties
     scene.traverse((object) => {
-      // Mark each object and its matrices as raw
-      if (object.matrix) object.matrix = markRaw(object.matrix)
-      if (object.matrixWorld) object.matrixWorld = markRaw(object.matrixWorld)
-      if (object.matrixWorldInverse) object.matrixWorldInverse = markRaw(object.matrixWorldInverse)
-      if (object.normalMatrix) object.normalMatrix = markRaw(object.normalMatrix)
-      if (object.geometry) object.geometry = markRaw(object.geometry)
+      // Helper function to safely mark properties as raw
+      const markPropertyRaw = (obj, propName) => {
+        try {
+          const descriptor = Object.getOwnPropertyDescriptor(obj, propName)
+          // Only mark if property exists and is writable
+          if (obj[propName] && (!descriptor || descriptor.writable !== false)) {
+            obj[propName] = markRaw(obj[propName])
+          }
+        } catch (e) {
+          // Skip read-only properties silently
+        }
+      }
+
+      // Mark matrices (skip if read-only)
+      markPropertyRaw(object, 'matrix')
+      markPropertyRaw(object, 'matrixWorld')
+      markPropertyRaw(object, 'matrixWorldInverse')
+      markPropertyRaw(object, 'normalMatrix')
+
+      // Mark geometry and material
+      markPropertyRaw(object, 'geometry')
+
       if (object.material) {
         if (Array.isArray(object.material)) {
           object.material = object.material.map(m => markRaw(m))
         } else {
-          object.material = markRaw(object.material)
+          markPropertyRaw(object, 'material')
         }
       }
     })
@@ -309,14 +325,25 @@ export async function restoreScene(savedState, renderer) {
     camera.position.fromArray(savedState.camera.position)
     camera.rotation.fromArray(savedState.camera.rotation)
     camera.zoom = savedState.camera.zoom
-    
-    // Mark camera matrices as raw to prevent Vue reactivity
-    if (camera.matrix) camera.matrix = markRaw(camera.matrix)
-    if (camera.matrixWorld) camera.matrixWorld = markRaw(camera.matrixWorld)
-    if (camera.matrixWorldInverse) camera.matrixWorldInverse = markRaw(camera.matrixWorldInverse)
-    if (camera.projectionMatrix) camera.projectionMatrix = markRaw(camera.projectionMatrix)
-    if (camera.projectionMatrixInverse) camera.projectionMatrixInverse = markRaw(camera.projectionMatrixInverse)
-    
+
+    // Mark camera matrices as raw to prevent Vue reactivity (safely)
+    const markPropertyRaw = (obj, propName) => {
+      try {
+        const descriptor = Object.getOwnPropertyDescriptor(obj, propName)
+        if (obj[propName] && (!descriptor || descriptor.writable !== false)) {
+          obj[propName] = markRaw(obj[propName])
+        }
+      } catch (e) {
+        // Skip read-only properties silently
+      }
+    }
+
+    markPropertyRaw(camera, 'matrix')
+    markPropertyRaw(camera, 'matrixWorld')
+    markPropertyRaw(camera, 'matrixWorldInverse')
+    markPropertyRaw(camera, 'projectionMatrix')
+    markPropertyRaw(camera, 'projectionMatrixInverse')
+
     console.log('  📷 Camera restored')
 
     // 5. Restore renderer settings
