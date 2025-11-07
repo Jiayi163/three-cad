@@ -1,6 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, markRaw } from 'vue'
 import { CADApplication } from '../packages/cad-core/application/CADApplication.js'
+import { history } from '../packages/cad-core/foundation/historyInstance.js'
+import {
+  CreateNodeCommand,
+  DeleteNodeCommand,
+  UpdateNodeCommand,
+  CopyObjectsCommand,
+  PasteObjectsCommand,
+  toClipboardDTO,
+  fromClipboardDTO
+} from '../packages/cad-core/foundation/Commands.js'
+import { useClipboardStore } from './clipboard.js'
 import * as THREE from 'three'
 
 export const useApplicationStore = defineStore('application', () => {
@@ -26,9 +37,9 @@ export const useApplicationStore = defineStore('application', () => {
   const viewCount = ref(0)
   const views = ref([])
 
-  // History state
-  const canUndo = ref(false)
-  const canRedo = ref(false)
+  // History state - computed from singleton history
+  const canUndo = computed(() => history.canUndo)
+  const canRedo = computed(() => history.canRedo)
 
   // Selection state
   const selectedNodeIds = ref([])
@@ -85,6 +96,13 @@ export const useApplicationStore = defineStore('application', () => {
       isLoading.value = true
       error.value = null
 
+      // Enable new DocumentPersistence system (disables old ThreeView auto-restore)
+      window.__CAD_USING_DOCUMENT_PERSISTENCE__ = true
+
+      // STEP 1: Load persisted document state (BEFORE initializing application)
+      const { loadDocumentState } = await import('../packages/cad-core/io/DocumentPersistence.js')
+      const persistedDocumentData = await loadDocumentState()
+
       // Create CADApplication instance
       cadApplication.value = new CADApplication()
 
@@ -93,6 +111,58 @@ export const useApplicationStore = defineStore('application', () => {
 
       // Initialize the application
       await cadApplication.value.initialize()
+
+      // STEP 2: If persisted state exists, restore it to the document
+      if (persistedDocumentData && cadApplication.value.activeDocument) {
+        console.log('🔄 Restoring document state from persistence...')
+        try {
+          // Set flag to prevent auto-save during restoration
+          window.__CAD_RESTORING__ = true
+
+          // Clear history before restoration to avoid undo/redo of restoration steps
+          history.clear()
+          console.log('History cleared before restoration')
+
+          // CRITICAL: Clear the document before loading to ensure clean state
+          const document = cadApplication.value.activeDocument
+
+          // Clear existing nodes (direct removal, bypass command history)
+          console.log('Clearing existing nodes before restore...')
+          const existingNodes = [...document.nodes.items]
+          existingNodes.forEach(node => {
+            if (node !== document.rootNode) {
+              // Direct removal, not through commands
+              document.removeNode(node)
+            }
+          })
+
+          // Now load the persisted data
+          await document.loadFromData(persistedDocumentData)
+          console.log('Document state restored:', document.name, `(${document.nodes.length} nodes)`)
+
+          // Clear history again after restoration to avoid undo/redo of load operations
+          history.clear()
+          console.log('History cleared after restoration')
+
+          // Re-enable auto-save after a short delay to ensure all scene updates are done
+          setTimeout(() => {
+            window.__CAD_RESTORING__ = false
+            console.log('🔓 Document restoration complete, auto-save re-enabled')
+
+            // STEP 3: Set up auto-save AFTER restoration is complete
+            setupDocumentPersistence()
+          }, 500)
+        } catch (err) {
+          console.error('Failed to restore document state:', err)
+          window.__CAD_RESTORING__ = false
+
+          // Still set up persistence even if restore failed
+          setupDocumentPersistence()
+        }
+      } else {
+        // STEP 3: No persisted data, set up auto-save immediately
+        setupDocumentPersistence()
+      }
 
       // Sync initial state
       syncApplicationState()
@@ -103,7 +173,8 @@ export const useApplicationStore = defineStore('application', () => {
         isInitialized: isInitialized.value,
         isLoading: isLoading.value,
         documentCount: documentCount.value,
-        activeDocumentId: activeDocumentId.value
+        activeDocumentId: activeDocumentId.value,
+        nodeCount: activeDocument.value?.nodes.length || 0
       })
 
     } catch (err) {
@@ -250,9 +321,11 @@ export const useApplicationStore = defineStore('application', () => {
     }
 
     try {
-      const node = document.addNode(nodeData, parent)
+      // Use singleton history for undo/redo support
+      const command = new CreateNodeCommand(document, nodeData)
+      history.execute(command)
       syncSelectionState()
-      return node
+      return command.createdNode
     } catch (err) {
       error.value = err.message
       throw err
@@ -266,9 +339,11 @@ export const useApplicationStore = defineStore('application', () => {
     }
 
     try {
-      const result = document.removeNode(node)
+      // Use singleton history for undo/redo support
+      const command = new DeleteNodeCommand(document, node.id)
+      history.execute(command)
       syncSelectionState()
-      return result
+      return true
     } catch (err) {
       error.value = err.message
       throw err
@@ -288,10 +363,12 @@ export const useApplicationStore = defineStore('application', () => {
         throw new Error(`Node with id ${nodeId} not found`)
       }
 
-      const result = document.removeNode(node)
+      // Use singleton history for undo/redo support
+      const command = new DeleteNodeCommand(document, nodeId)
+      history.execute(command)
       syncSelectionState()
 
-      return result
+      return true
     } catch (err) {
       console.error('Error deleting node:', err)
       error.value = err.message
@@ -349,17 +426,15 @@ export const useApplicationStore = defineStore('application', () => {
   // ==================== History Management ====================
 
   function undo() {
-    if (!cadApplication.value) {
-      throw new Error('Application not initialized')
-    }
-
     try {
-      console.log('Application store undo called')
-      const result = cadApplication.value.undo()
-      console.log('CADApplication undo result:', result)
-      syncHistoryState()
-      syncSelectionState()
-      console.log('Undo completed, canUndo:', canUndo.value, 'canRedo:', canRedo.value)
+      console.log('Undo called from store')
+      const result = history.undo()
+      if (result) {
+        syncSelectionState()
+        console.log('Undo completed, canUndo:', canUndo.value, 'canRedo:', canRedo.value)
+      } else {
+        console.log('Nothing to undo')
+      }
       return result
     } catch (err) {
       console.error('Undo error:', err)
@@ -369,17 +444,15 @@ export const useApplicationStore = defineStore('application', () => {
   }
 
   function redo() {
-    if (!cadApplication.value) {
-      throw new Error('Application not initialized')
-    }
-
     try {
-      console.log('Application store redo called')
-      const result = cadApplication.value.redo()
-      console.log('CADApplication redo result:', result)
-      syncHistoryState()
-      syncSelectionState()
-      console.log('Redo completed, canUndo:', canUndo.value, 'canRedo:', canRedo.value)
+      console.log('Redo called from store')
+      const result = history.redo()
+      if (result) {
+        syncSelectionState()
+        console.log('Redo completed, canUndo:', canUndo.value, 'canRedo:', canRedo.value)
+      } else {
+        console.log('Nothing to redo')
+      }
       return result
     } catch (err) {
       console.error('Redo error:', err)
@@ -389,17 +462,108 @@ export const useApplicationStore = defineStore('application', () => {
   }
 
   function clearHistory() {
-    if (!cadApplication.value) {
-      throw new Error('Application not initialized')
-    }
-
     try {
-      cadApplication.value.clearHistory()
-      syncHistoryState()
+      history.clear()
+      console.log('History cleared')
     } catch (err) {
       error.value = err.message
       throw err
     }
+  }
+
+  // ==================== Clipboard Operations ====================
+
+  /**
+   * Copy selected objects to clipboard
+   * @returns {boolean} True if copy was successful
+   */
+  function copyObjects() {
+    const document = activeDocument.value
+    if (!document) {
+      console.warn('No active document for copy operation')
+      return false
+    }
+
+    const selectedNodes = document.selectedNodes?.items ?? []
+    if (selectedNodes.length === 0) {
+      console.warn('No objects selected to copy')
+      return false
+    }
+
+    try {
+      // Get clipboard store
+      const clipboardStore = useClipboardStore()
+
+      // Convert selected nodes to clipboard DTOs
+      const clipboardDTOs = selectedNodes.map(node => toClipboardDTO(node))
+
+      // Store in clipboard
+      clipboardStore.set(clipboardDTOs)
+
+      console.log(`Copied ${clipboardDTOs.length} objects to clipboard`)
+      return true
+    } catch (err) {
+      console.error('Copy operation failed:', err)
+      error.value = err.message
+      return false
+    }
+  }
+
+  /**
+   * Paste objects from clipboard
+   * @param {Object} options - Paste options (offset, etc.)
+   * @returns {Array} Array of created nodes
+   */
+  function pasteObjects(options = {}) {
+    const document = activeDocument.value
+    if (!document) {
+      console.warn('No active document for paste operation')
+      return []
+    }
+
+    try {
+      // Get clipboard store
+      const clipboardStore = useClipboardStore()
+
+      if (!clipboardStore.hasItems) {
+        console.warn('Clipboard is empty')
+        return []
+      }
+
+      // Get clipboard data
+      const clipboardDTOs = clipboardStore.get()
+
+      // Create and execute paste command (this will add to history)
+      const pasteCommand = new PasteObjectsCommand(document, clipboardDTOs, options)
+      history.execute(pasteCommand)
+
+      // Sync state
+      syncSelectionState()
+
+      console.log(`Pasted ${pasteCommand.createdNodes.length} objects from clipboard`)
+      return pasteCommand.createdNodes
+    } catch (err) {
+      console.error('Paste operation failed:', err)
+      error.value = err.message
+      return []
+    }
+  }
+
+  /**
+   * Check if clipboard has items
+   * @returns {boolean} True if clipboard has items
+   */
+  function hasClipboardItems() {
+    const clipboardStore = useClipboardStore()
+    return clipboardStore.hasItems
+  }
+
+  /**
+   * Clear clipboard
+   */
+  function clearClipboard() {
+    const clipboardStore = useClipboardStore()
+    clipboardStore.clear()
   }
 
   // ==================== View Management ====================
@@ -610,7 +774,7 @@ export const useApplicationStore = defineStore('application', () => {
     }
   }
 
-  // Command handlers - temporary implementations for Phase 4
+  // Command handlers - uses singleton history for undo/redo
   async function handleCreateBoxCommand(document) {
     // Create a box node with default parameters
     const nodeData = {
@@ -628,10 +792,12 @@ export const useApplicationStore = defineStore('application', () => {
       }
     }
 
-    const node = document.addNode(nodeData)
-    document.selectNode(node, false) // Select the new node
-    console.log('Created box node:', node)
-    return node
+    // Use singleton history for undo/redo support
+    const command = new CreateNodeCommand(document, nodeData)
+    history.execute(command)
+    document.selectNode(command.createdNode, false) // Select the new node
+    console.log('Created box node:', command.createdNode)
+    return command.createdNode
   }
 
   async function handleCreateSphereCommand(document) {
@@ -648,10 +814,11 @@ export const useApplicationStore = defineStore('application', () => {
       }
     }
 
-    const node = document.addNode(nodeData)
-    document.selectNode(node, false)
-    console.log('Created sphere node:', node)
-    return node
+    const command = new CreateNodeCommand(document, nodeData)
+    history.execute(command)
+    document.selectNode(command.createdNode, false)
+    console.log('Created sphere node:', command.createdNode)
+    return command.createdNode
   }
 
   async function handleCreateCylinderCommand(document) {
@@ -669,10 +836,11 @@ export const useApplicationStore = defineStore('application', () => {
       }
     }
 
-    const node = document.addNode(nodeData)
-    document.selectNode(node, false)
-    console.log('Created cylinder node:', node)
-    return node
+    const command = new CreateNodeCommand(document, nodeData)
+    history.execute(command)
+    document.selectNode(command.createdNode, false)
+    console.log('Created cylinder node:', command.createdNode)
+    return command.createdNode
   }
 
 
@@ -691,10 +859,11 @@ export const useApplicationStore = defineStore('application', () => {
       }
     }
 
-    const node = document.addNode(nodeData)
-    document.selectNode(node, false)
-    console.log('Created plane node:', node)
-    return node
+    const command = new CreateNodeCommand(document, nodeData)
+    history.execute(command)
+    document.selectNode(command.createdNode, false)
+    console.log('Created plane node:', command.createdNode)
+    return command.createdNode
   }
 
 
@@ -951,6 +1120,56 @@ export const useApplicationStore = defineStore('application', () => {
     }
   }
 
+  // ==================== Document Persistence ====================
+
+  async function setupDocumentPersistence() {
+    const document = activeDocument.value
+    if (!document) {
+      console.warn('No active document for persistence setup, will retry...')
+      // Retry after a short delay
+      setTimeout(() => {
+        if (activeDocument.value) {
+          console.log('Active document now available, setting up persistence')
+          setupDocumentPersistence()
+        } else {
+          console.error('Still no active document after delay')
+        }
+      }, 1000)
+      return
+    }
+
+    console.log('Setting up document persistence for:', document.name)
+
+    const { saveDocumentStateDebounced } = await import('../packages/cad-core/io/DocumentPersistence.js')
+
+    // Auto-save when nodes change
+    document.nodes.onCollectionChanged(() => {
+      // Don't auto-save during document restoration
+      if (window.__CAD_RESTORING__) {
+        console.log('Skipping auto-save during restoration')
+        return
+      }
+
+      console.log('Nodes changed, auto-saving document...')
+      saveDocumentStateDebounced(document)
+    })
+
+    // Auto-save when document properties change
+    document.onPropertyChanged('isModified', () => {
+      // Don't auto-save during document restoration
+      if (window.__CAD_RESTORING__) {
+        return
+      }
+
+      if (document.isModified) {
+        console.log('Document modified, auto-saving...')
+        saveDocumentStateDebounced(document)
+      }
+    })
+
+    console.log('Document auto-save enabled for:', document.name, `(${document.nodes.length} nodes)`)
+  }
+
   // ==================== State Synchronization ====================
 
   function syncApplicationState() {
@@ -978,9 +1197,8 @@ export const useApplicationStore = defineStore('application', () => {
       documentId: view.document ? view.document.id : null
     }))
 
-    // Update history state
-    canUndo.value = info.canUndo
-    canRedo.value = info.canRedo
+    // History state is automatically updated via computed properties (canUndo, canRedo)
+    // No need to manually sync - they read directly from history singleton
   }
 
   function syncDocumentState() {
@@ -997,8 +1215,7 @@ export const useApplicationStore = defineStore('application', () => {
     documentCount.value = cadApplication.value.documents.length
     activeDocumentId.value = cadApplication.value.activeDocument ? cadApplication.value.activeDocument.id : null
 
-    // Update history state
-    syncHistoryState()
+    // History state automatically updated via computed properties
   }
 
   function syncViewState() {
@@ -1015,13 +1232,7 @@ export const useApplicationStore = defineStore('application', () => {
     activeViewId.value = cadApplication.value.activeView ? cadApplication.value.activeView.id : null
   }
 
-  function syncHistoryState() {
-    if (!cadApplication.value) return
-
-    const info = cadApplication.value.getInfo()
-    canUndo.value = info.canUndo
-    canRedo.value = info.canRedo
-  }
+  // syncHistoryState removed - using computed properties from commandHistory
 
   function syncSelectionState() {
     const document = activeDocument.value
@@ -1067,13 +1278,8 @@ export const useApplicationStore = defineStore('application', () => {
       syncViewState()
     })
 
-    cadApplication.value.onPropertyChanged('canUndo', () => {
-      syncHistoryState()
-    })
-
-    cadApplication.value.onPropertyChanged('canRedo', () => {
-      syncHistoryState()
-    })
+    // canUndo and canRedo are now computed from commandHistory
+    // No need to sync from CADApplication
 
     // Listen to document collection changes
     cadApplication.value.documents.onCollectionChanged(() => {
@@ -1131,8 +1337,8 @@ export const useApplicationStore = defineStore('application', () => {
     activeViewId.value = null
     viewCount.value = 0
     views.value = []
-    canUndo.value = false
-    canRedo.value = false
+    // canUndo and canRedo are computed properties, cannot be set directly
+    // They will automatically reflect the history state
     selectedNodeIds.value = []
     selectedCount.value = 0
 
@@ -1231,6 +1437,12 @@ export const useApplicationStore = defineStore('application', () => {
     redo,
     clearHistory,
 
+    // Clipboard operations
+    copyObjects,
+    pasteObjects,
+    hasClipboardItems,
+    clearClipboard,
+
     // View management
     createView,
     setActiveView,
@@ -1254,7 +1466,6 @@ export const useApplicationStore = defineStore('application', () => {
     syncApplicationState,
     syncDocumentState,
     syncViewState,
-    syncHistoryState,
     syncSelectionState,
 
     // Debug helpers

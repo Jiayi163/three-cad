@@ -11,6 +11,7 @@
  */
 
 import * as THREE from 'three';
+import { markRaw } from 'vue';
 import { VisualObject } from './VisualObject.js';
 import { geometryFactory } from './GeometryFactory.js';
 
@@ -57,8 +58,8 @@ export class BoxVisualObject extends VisualObject {
             this._material = this.createMaterial('default');
             this._originalMaterial = this._material;
 
-            // Create mesh
-            this._object3D = new THREE.Mesh(this._geometry, this._material);
+            // Create mesh - CRITICAL: markRaw to prevent Vue reactivity Proxy wrapping
+            this._object3D = markRaw(new THREE.Mesh(this._geometry, this._material));
             this._object3D.userData.visualObject = this;
             this._object3D.userData.nodeId = this._nodeId;
 
@@ -176,7 +177,7 @@ export class SphereVisualObject extends VisualObject {
             this._material = this.createMaterial('default');
             this._originalMaterial = this._material;
 
-            this._object3D = new THREE.Mesh(this._geometry, this._material);
+            this._object3D = markRaw(new THREE.Mesh(this._geometry, this._material));
             this._object3D.userData.visualObject = this;
             this._object3D.userData.nodeId = this._nodeId;
 
@@ -267,7 +268,7 @@ export class CylinderVisualObject extends VisualObject {
             this._material = this.createMaterial('default');
             this._originalMaterial = this._material;
 
-            this._object3D = new THREE.Mesh(this._geometry, this._material);
+            this._object3D = markRaw(new THREE.Mesh(this._geometry, this._material));
             this._object3D.userData.visualObject = this;
             this._object3D.userData.nodeId = this._nodeId;
 
@@ -358,7 +359,7 @@ export class PlaneVisualObject extends VisualObject {
             this._material = this.createMaterial('default');
             this._originalMaterial = this._material;
 
-            this._object3D = new THREE.Mesh(this._geometry, this._material);
+            this._object3D = markRaw(new THREE.Mesh(this._geometry, this._material));
             this._object3D.userData.visualObject = this;
             this._object3D.userData.nodeId = this._nodeId;
 
@@ -444,7 +445,7 @@ export class ConeVisualObject extends VisualObject {
             this._material = this.createMaterial('default');
             this._originalMaterial = this._material;
 
-            this._object3D = new THREE.Mesh(this._geometry, this._material);
+            this._object3D = markRaw(new THREE.Mesh(this._geometry, this._material));
             this._object3D.userData.visualObject = this;
             this._object3D.userData.nodeId = this._nodeId;
 
@@ -532,7 +533,7 @@ export class TorusVisualObject extends VisualObject {
             this._material = this.createMaterial('default');
             this._originalMaterial = this._material;
 
-            this._object3D = new THREE.Mesh(this._geometry, this._material);
+            this._object3D = markRaw(new THREE.Mesh(this._geometry, this._material));
             this._object3D.userData.visualObject = this;
             this._object3D.userData.nodeId = this._nodeId;
 
@@ -723,7 +724,7 @@ export class CircleVisualObject extends VisualObject {
             this._material = this.createMaterial('default');
             this._originalMaterial = this._material;
 
-            this._object3D = new THREE.Mesh(this._geometry, this._material);
+            this._object3D = markRaw(new THREE.Mesh(this._geometry, this._material));
             this._object3D.userData.visualObject = this;
             this._object3D.userData.nodeId = this._nodeId;
 

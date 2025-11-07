@@ -110,11 +110,19 @@ export class VisualObject extends Observable {
     }
 
     /**
-     * Get the node ID associated with this visual object
+     * Get/Set the node ID associated with this visual object
      * @returns {string|null}
      */
     get nodeId() {
         return this._nodeId;
+    }
+
+    set nodeId(value) {
+        if (this._nodeId !== value) {
+            this._nodeId = value;
+            // Update the observable property
+            this.setProperty('nodeId', value);
+        }
     }
 
     /**

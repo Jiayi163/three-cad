@@ -178,6 +178,77 @@ export default {
     // Phase 5.3 - Node to Visual Object mapping system
     const nodeToVisualObjectMap = new Map()
 
+    /**
+     * Idempotent scene rehydration from document store
+     * Syncs three.js scene with document nodes (single source of truth)
+     */
+    const rehydrateSceneFromStore = async () => {
+      const document = activeDocument.value
+      if (!document || !threeView.value) {
+        console.warn('Cannot rehydrate scene: missing document or threeView')
+        return
+      }
+
+      console.log('🔄 Rehydrating scene from store...')
+
+      // Step 1: Build index of existing meshes by nodeId
+      const existingMeshes = new Map()
+      if (threeView.value.scene) {
+        threeView.value.scene.traverse((obj) => {
+          if (obj.userData?.nodeId && obj.isMesh) {
+            existingMeshes.set(obj.userData.nodeId, obj)
+          }
+        })
+      }
+
+      console.log(`  Found ${existingMeshes.size} existing meshes in scene`)
+      console.log(`  Document has ${document.nodes.length} nodes`)
+
+      // Step 2: For each document node, create or update mesh
+      const processedNodeIds = new Set()
+      for (const node of document.nodes) {
+        if (!node || !node.id) continue
+
+        processedNodeIds.add(node.id)
+
+        // Check if node has visualObject
+        if (node.visualObject && typeof node.visualObject.create === 'function') {
+          if (existingMeshes.has(node.id)) {
+            // Mesh already exists, update properties if needed
+            const mesh = existingMeshes.get(node.id)
+            console.log(`  ✓ Mesh exists for ${node.name}, updating properties`)
+
+            // Update transform from visualObject
+            if (node.visualObject.position) {
+              mesh.position.copy(node.visualObject.position)
+            }
+            if (node.visualObject.rotation) {
+              mesh.rotation.copy(node.visualObject.rotation)
+            }
+            if (node.visualObject.scale) {
+              mesh.scale.copy(node.visualObject.scale)
+            }
+          } else {
+            // Mesh doesn't exist, create it
+            console.log(`  + Creating mesh for ${node.name}`)
+            await handleNodeAdded(node)
+          }
+        }
+      }
+
+      // Step 3: Remove orphan meshes (meshes without corresponding nodes)
+      for (const [nodeId, mesh] of existingMeshes) {
+        if (!processedNodeIds.has(nodeId)) {
+          console.log(`  - Removing orphan mesh with nodeId: ${nodeId}`)
+          threeView.value.removeVisualObject(nodeId)
+          nodeToVisualObjectMap.delete(nodeId)
+        }
+      }
+
+      console.log('✅ Scene rehydration complete')
+      threeView.value.requestRender()
+    }
+
     const setupDocumentListeners = () => {
       const document = activeDocument.value
       if (!document) {
@@ -231,11 +302,9 @@ export default {
         }
       })
 
-      // Process existing nodes in the document
-      console.log('Processing existing nodes in document...')
-      for (const node of document.nodes) {
-        handleNodeAdded(node)
-      }
+      // IMPORTANT: Don't process existing nodes immediately here
+      // The rehydrateSceneFromStore function will be called after document restoration
+      // to ensure proper order: load → restore → rehydrate → render
 
       console.log('Document listeners setup complete')
 
@@ -620,6 +689,12 @@ export default {
 
       console.log('🎯 Initializing ThreeView...')
       initThreeView()
+
+      // After ThreeView is initialized, rehydrate scene from document store
+      // This ensures proper bootstrap order: load → restore → rehydrate → render
+      console.log('🔄 Rehydrating scene from document store...')
+      await rehydrateSceneFromStore()
+      console.log('✅ Scene rehydration complete')
     })
 
     onUnmounted(() => {
@@ -747,6 +822,11 @@ export default {
   position: relative;
   overflow: hidden;
   background: #1a1a1a;
+  /* Ensure container can shrink/grow with flex/grid */
+  min-width: 0;
+  min-height: 0;
+  /* Allow pointer events to pass through to canvas by default */
+  pointer-events: auto;
 }
 
 .error-message {
@@ -888,6 +968,8 @@ export default {
 
 .three-container canvas {
   display: block;
+  width: 100%;
+  height: 100%;
   outline: none;
 }
 </style>

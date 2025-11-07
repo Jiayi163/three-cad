@@ -5,6 +5,7 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { clearPersistedState } from '@/packages/cad-core/io/ScenePersistence.js'
+import { clearDocumentState } from '@/packages/cad-core/io/DocumentPersistence.js'
 
 const app = createApp(App)
 
@@ -13,16 +14,31 @@ app.use(router)
 
 app.mount('#app')
 
-// Expose helper functions to console for easy state management and debugging
+// Expose helper functions and history to console for debugging
+import { history } from '@/packages/cad-core/foundation/historyInstance.js'
+
 if (typeof window !== 'undefined') {
+  // Expose history instance for debugging
+  window.__HISTORY__ = history
+  console.log('[MAIN] History instance exposed as window.__HISTORY__')
+
   window.clearCADState = async () => {
-    const success = await clearPersistedState()
-    if (success) {
-      console.log('✅ CAD state cleared! Refresh the page to start fresh.')
-      return 'State cleared. Please refresh the page.'
+    console.log('🧹 Clearing all CAD persistence data...')
+
+    // Clear both ScenePersistence and DocumentPersistence
+    const sceneCleared = await clearPersistedState()
+    const docCleared = await clearDocumentState()
+
+    if (sceneCleared && docCleared) {
+      console.log('All CAD state cleared! (Scene + Document)')
+      console.log('   Refresh the page to start fresh.')
+      return 'All state cleared. Please refresh the page.'
     } else {
-      console.error('❌ Failed to clear state')
-      return 'Failed to clear state'
+      console.warn('Partial clear:', {
+        scene: sceneCleared ? 'OK' : 'FAILED',
+        document: docCleared ? 'OK' : 'FAILED'
+      })
+      return `Partial clear: scene=${sceneCleared}, document=${docCleared}`
     }
   }
 

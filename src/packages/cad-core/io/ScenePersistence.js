@@ -33,6 +33,141 @@ function debounce(func, wait) {
 }
 
 /**
+ * Serialize view settings only (camera, renderer) - no scene objects
+ * Used when DocumentPersistence is active to avoid duplicate meshes
+ */
+export function serializeViewSettings(threeView) {
+  const { camera, renderer } = threeView;
+  const controls = threeView.controls || threeView.cameraController;
+  const size = threeView._lastSize || { width: 0, height: 0 };
+
+  return {
+    camera: {
+      position: camera.position.toArray(),
+      target: controls?.target?.toArray?.() ?? [0, 0, 0],
+      rotation: camera.rotation.toArray(),
+      fov: camera.fov,
+      near: camera.near,
+      far: camera.far,
+      zoom: camera.zoom || 1
+    },
+    renderer: {
+      alpha: renderer.getContextAttributes()?.alpha ?? false,
+      pixelRatio: renderer.getPixelRatio(),
+      size: {
+        width: size.width || 0,
+        height: size.height || 0
+      },
+      toneMapping: renderer.toneMapping,
+      toneMappingExposure: renderer.toneMappingExposure,
+      outputColorSpace: renderer.outputColorSpace,
+      shadowMapEnabled: renderer.shadowMap?.enabled || false
+    }
+  };
+}
+
+/**
+ * Restore view settings only (camera, renderer) - no scene objects
+ */
+export function restoreViewSettings(threeView, state) {
+  if (!state || !state.camera || !state.renderer) {
+    return false;
+  }
+
+  const { camera, renderer } = threeView;
+  const controls = threeView.controls || threeView.cameraController;
+  const { camera: camState, renderer: renState } = state;
+
+  // Restore camera
+  if (camState.position) {
+    camera.position.fromArray(camState.position);
+  }
+  if (camState.rotation) {
+    camera.rotation.fromArray(camState.rotation);
+  }
+  if (camState.fov !== undefined) {
+    camera.fov = camState.fov;
+  }
+  if (camState.near !== undefined) {
+    camera.near = camState.near;
+  }
+  if (camState.far !== undefined) {
+    camera.far = camState.far;
+  }
+  if (camState.zoom !== undefined) {
+    camera.zoom = camState.zoom;
+  }
+  camera.updateProjectionMatrix();
+
+  // Restore camera target (controls)
+  if (controls && camState.target) {
+    if (controls.target && typeof controls.target.fromArray === 'function') {
+      controls.target.fromArray(camState.target);
+    }
+    if (typeof controls.update === 'function') {
+      controls.update();
+    }
+  }
+
+  // Restore renderer
+  if (renState.size && renState.size.width && renState.size.height) {
+    threeView.setSize(renState.size.width, renState.size.height);
+  }
+  if (renState.pixelRatio !== undefined) {
+    renderer.setPixelRatio(renState.pixelRatio);
+  }
+  if (renState.toneMapping !== undefined) {
+    renderer.toneMapping = renState.toneMapping;
+  }
+  if (renState.toneMappingExposure !== undefined) {
+    renderer.toneMappingExposure = renState.toneMappingExposure;
+  }
+  if (renState.outputColorSpace !== undefined) {
+    renderer.outputColorSpace = renState.outputColorSpace;
+  }
+  if (renState.shadowMapEnabled !== undefined && renderer.shadowMap) {
+    renderer.shadowMap.enabled = renState.shadowMapEnabled;
+  }
+
+  return true;
+}
+
+/**
+ * Save view settings only (camera, renderer) to IndexedDB
+ * Used when DocumentPersistence is active
+ */
+export async function saveViewSettingsOnly(threeView) {
+  if (!isIndexedDBAvailable()) {
+    return false;
+  }
+
+  try {
+    const viewSettings = serializeViewSettings(threeView);
+
+    const payload = {
+      version: STATE_VERSION,
+      savedAt: Date.now(),
+      viewSettings,
+      // Mark as view-only (no scene objects)
+      viewOnly: true
+    };
+
+    await db.state.put({
+      id: STATE_KEY,
+      payload
+    });
+
+    if (!isSilentMode()) {
+      console.log('💾 Saved view settings only (DocumentPersistence active)');
+    }
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to save view settings:', error);
+    return false;
+  }
+}
+
+/**
  * Save complete application state to IndexedDB
  *
  * @param {Object} options
@@ -206,12 +341,45 @@ export async function loadState() {
  * Restore Three.js scene from persisted state
  *
  * @param {Object} savedState - State from loadState()
- * @param {THREE.WebGLRenderer} renderer - Renderer instance
+ * @param {THREE.WebGLRenderer|Object} rendererOrThreeView - Renderer instance or ThreeView instance
+ * @param {Object} opts - Options
  * @returns {Promise<Object>} Restored scene, camera, and metadata
  */
-export async function restoreScene(savedState, renderer) {
+export async function restoreScene(savedState, rendererOrThreeView, opts = {}) {
   if (!savedState) {
     return null
+  }
+
+  // ---- DOUBLE INSURANCE: Check document mode even if called directly ----
+  const threeView = rendererOrThreeView?.scene ? rendererOrThreeView : null;
+  const renderer = threeView?.renderer || rendererOrThreeView;
+
+  const docMode =
+    threeView?.options?.useDocumentPersistence === true ||
+    window.__CAD_USING_DOCUMENT_PERSISTENCE__ === true;
+
+  const viewOnly = docMode || opts.viewOnly === true || savedState.viewOnly;
+
+  if (viewOnly) {
+    console.log('[RESTORE] View-only mode → restoring view settings only, no scene objects');
+    if (threeView) {
+      // Restore view settings directly
+      const viewState = savedState.viewSettings || {
+        camera: savedState.camera,
+        renderer: savedState.renderer
+      };
+      if (viewState.camera && viewState.renderer) {
+        restoreViewSettings(threeView, viewState);
+      }
+    }
+    return {
+      scene: null, // Signal that scene should not be replaced
+      camera: null, // Camera will be restored separately via restoreViewSettings
+      environment: savedState.environment || {},
+      ui: savedState.ui || {},
+      textureMap: new Map(),
+      viewOnly: true
+    }
   }
 
   try {
@@ -347,7 +515,7 @@ export async function restoreScene(savedState, renderer) {
     console.log('  📷 Camera restored')
 
     // 5. Restore renderer settings
-    if (renderer) {
+    if (renderer && savedState.renderer) {
       renderer.toneMapping = savedState.renderer.toneMapping
       renderer.toneMappingExposure = savedState.renderer.toneMappingExposure
       renderer.outputColorSpace = savedState.renderer.outputColorSpace

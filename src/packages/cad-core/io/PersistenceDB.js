@@ -19,15 +19,21 @@ class CADPersistenceDB extends Dexie {
   constructor() {
     super('cad-persistence')
 
-    this.version(1).stores({
+    this.version(2).stores({
       // Application state (single record with id='latest')
       state: 'id',
+
+      // Document state (the single source of truth)
+      document: 'id',
 
       // Binary blobs for user-imported images/textures
       blobs: 'key, type, savedAt',
 
       // Metadata for quick queries
       metadata: 'key, value'
+    }).upgrade(trans => {
+      // Migration from version 1 to 2
+      // Just adds the document store, no data migration needed
     })
   }
 }
@@ -54,7 +60,7 @@ export async function clearAllData() {
   await db.state.clear()
   await db.blobs.clear()
   await db.metadata.clear()
-  console.log('✅ All persisted data cleared')
+  console.log('All persisted data cleared')
 }
 
 /**
@@ -84,4 +90,5 @@ export async function getDBStats() {
 }
 
 export default db
+
 

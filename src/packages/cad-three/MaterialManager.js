@@ -10,6 +10,7 @@
  */
 
 import * as THREE from 'three';
+import { markRaw } from 'vue';
 
 export class MaterialManager {
     constructor() {
@@ -250,8 +251,8 @@ export class MaterialManager {
             return this._materialCache.get(cacheKey);
         }
 
-        // Create new material
-        const material = new THREE.MeshStandardMaterial(config);
+        // Create new material - CRITICAL: markRaw to prevent Vue reactivity Proxy wrapping
+        const material = markRaw(new THREE.MeshStandardMaterial(config));
 
         // Cache material
         this._materialCache.set(cacheKey, material);
@@ -314,10 +315,13 @@ export class MaterialManager {
                     // Apply texture options
                     this._applyTextureOptions(texture, options);
 
-                    // Cache texture
-                    this._textureCache.set(cacheKey, texture);
+                    // CRITICAL: markRaw to prevent Vue reactivity Proxy wrapping
+                    const rawTexture = markRaw(texture);
 
-                    resolve(texture);
+                    // Cache texture
+                    this._textureCache.set(cacheKey, rawTexture);
+
+                    resolve(rawTexture);
                 },
                 undefined,
                 (error) => {

@@ -4,14 +4,14 @@
  * Features:
  * - Command registration and execution
  * - Command queue management
- * - History tracking for undo/redo
+ * - History tracking for undo/redo (uses singleton history)
  * - Error handling and recovery
  * - Command cancellation
  */
 
 import { Observable } from '../foundation/Observable.js'
 import { ObservableCollection } from '../foundation/Collection.js'
-import { History } from '../foundation/History.js'
+import { history } from '../foundation/historyInstance.js'
 
 /**
  * Manages the execution of commands in the CAD application
@@ -33,8 +33,8 @@ export class CommandManager extends Observable {
     this.commandQueue = new ObservableCollection()
     this.isProcessingQueue = false
 
-    // History for undo/redo operations
-    this.history = new History()
+    // Use singleton history instance (no local instance)
+    // this.history is accessed via the singleton
 
     // Statistics
     this.executedCommandsCount = 0
@@ -135,32 +135,55 @@ export class CommandManager extends Observable {
       this.notifyPropertyChanged('currentCommand', command)
       this.notifyPropertyChanged('isExecuting', true)
 
-      // Execute the command
-      const result = await command.execute(this.application)
+      // Store result for returning
+      let result
 
-      // Add to history for undo/redo (only if command completed successfully)
+      // Execute the command first (async)
+      result = await command.execute(this.application)
+
+      // Only add to history if command completed successfully
       if (command.isCompleted && !command.isCancelled) {
-        // Create a custom history record for command execution
-        const commandHistoryRecord = {
-          name: command.name,
-          command: command,
-          undo: () => this.undoCommand(command),
-          redo: () => this.redoCommand(command),
+        // Create history command wrapper
+        const historyCommand = {
+          name: command.name || 'Unnamed Command',
+          _commandInstance: command,
+          do: () => {
+            // Redo operation
+            this.redoCommand(command)
+          },
+          undo: () => {
+            this.undoCommand(command)
+          },
           dispose: () => {
-            // Clean up command resources if needed
             if (command.dispose) {
               command.dispose()
             }
           }
         }
 
-        this.history.add(commandHistoryRecord)
+        // Add directly to history stack without calling execute()
+        // (command already executed above, we just need it in the stack)
+        history.undoStack.push(historyCommand)
+
+        // Cap stack size
+        if (history.undoStack.length > history.maxSize) {
+          history.undoStack.shift()
+        }
+
+        // Clear redo stack (new action invalidates redo history)
+        history.redoStack.length = 0
+
+        // Update canUndo/canRedo properties and notify observers
+        history._updateCanExecute()
+
+        console.log(`[CommandManager] Added command to history: ${historyCommand.name}`)
       }
 
       this.executedCommandsCount++
       this.notifyPropertyChanged('executedCommandsCount', this.executedCommandsCount)
 
       console.log(`Command ${command.name} executed successfully`)
+
       return result
 
     } catch (error) {
@@ -260,7 +283,7 @@ export class CommandManager extends Observable {
     }
 
     try {
-      await this.history.undo()
+      history.undo()
       console.log('Undo completed')
       return true
     } catch (error) {
@@ -279,7 +302,7 @@ export class CommandManager extends Observable {
     }
 
     try {
-      await this.history.redo()
+      history.redo()
       console.log('Redo completed')
       return true
     } catch (error) {
@@ -293,7 +316,7 @@ export class CommandManager extends Observable {
    * @returns {boolean} True if undo is available
    */
   canUndo() {
-    return this.history.canUndo()
+    return history.canUndo
   }
 
   /**
@@ -301,7 +324,7 @@ export class CommandManager extends Observable {
    * @returns {boolean} True if redo is available
    */
   canRedo() {
-    return this.history.canRedo()
+    return history.canRedo
   }
 
   /**
@@ -309,7 +332,7 @@ export class CommandManager extends Observable {
    * @returns {Array} List of undoable operations
    */
   getUndoHistory() {
-    return this.history.getUndoHistory()
+    return history.undoStack.map(cmd => ({ name: cmd.name }))
   }
 
   /**
@@ -317,7 +340,7 @@ export class CommandManager extends Observable {
    * @returns {Array} List of redoable operations
    */
   getRedoHistory() {
-    return this.history.getRedoHistory()
+    return history.redoStack.map(cmd => ({ name: cmd.name }))
   }
 
   /**
@@ -327,8 +350,18 @@ export class CommandManager extends Observable {
   async redoCommand(command) {
     // For geometry commands, re-add created objects
     if (command.createdObjects && command.createdObjects.length > 0) {
-      for (const obj of command.createdObjects) {
-        await this.application.activeDocument.addNode(obj)
+      for (const visualObj of command.createdObjects) {
+        // Re-create node data and add to document
+        const nodeData = {
+          id: visualObj.id,
+          name: visualObj.name,
+          type: visualObj.type || visualObj._type,
+          visible: true,
+          locked: false,
+          geometry: visualObj.geometry,
+          visualObject: visualObj
+        }
+        await this.application.activeDocument.addNode(nodeData)
       }
     }
 
@@ -349,8 +382,12 @@ export class CommandManager extends Observable {
   async undoCommand(command) {
     // For geometry commands, remove created objects
     if (command.createdObjects && command.createdObjects.length > 0) {
-      for (const obj of command.createdObjects) {
-        await this.application.activeDocument.removeNode(obj)
+      for (const visualObj of command.createdObjects) {
+        // Find the node by visualObject ID and remove it
+        const node = this.application.activeDocument.findNodeById(visualObj.id)
+        if (node) {
+          await this.application.activeDocument.removeNode(node)
+        }
       }
     }
 
@@ -383,12 +420,12 @@ export class CommandManager extends Observable {
    * Set up event handlers for internal state management
    */
   setupEventHandlers() {
-    // Listen to history changes
-    this.history.onPropertyChanged('canUndo', (canUndo) => {
+    // Listen to singleton history changes
+    history.onPropertyChanged('canUndo', (canUndo) => {
       this.notifyPropertyChanged('canUndo', canUndo)
     })
 
-    this.history.onPropertyChanged('canRedo', (canRedo) => {
+    history.onPropertyChanged('canRedo', (canRedo) => {
       this.notifyPropertyChanged('canRedo', canRedo)
     })
 
@@ -410,8 +447,7 @@ export class CommandManager extends Observable {
     // Clear queue
     this.clearQueue()
 
-    // Clear history
-    this.history.clear()
+    // Note: Don't clear singleton history here as it's shared across the application
 
     // Clear registrations
     this.registeredCommands.clear()

@@ -1,6 +1,7 @@
 import { Observable } from '../foundation/Observable.js';
 import { ObservableCollection } from '../foundation/Collection.js';
 import { History } from '../foundation/History.js';
+import { markRaw } from 'vue';
 
 /**
  * Document - Represents a CAD document with node hierarchy
@@ -165,14 +166,8 @@ export class Document extends Observable {
     // Add to nodes collection
     this._nodes.add(node);
 
-    // Record in history
-    const record = this._history.createCollectionRecord(
-      this._nodes,
-      'add',
-      [node],
-      this._nodes.length - 1
-    );
-    this._history.add(record);
+    // Note: History recording disabled - using command pattern in store instead
+    // The CommandHistory in the application store handles undo/redo
 
     // Mark as modified
     this._markModified();
@@ -207,14 +202,8 @@ export class Document extends Observable {
     const removed = this._nodes.remove(node);
 
     if (removed) {
-      // Record in history
-      const record = this._history.createCollectionRecord(
-        this._nodes,
-        'remove',
-        [node],
-        this._nodes.indexOf(node)
-      );
-      this._history.add(record);
+      // Note: History recording disabled - using command pattern in store instead
+      // The CommandHistory in the application store handles undo/redo
 
       // Clean up node
       this._disposeNode(node);
@@ -407,17 +396,17 @@ export class Document extends Observable {
     }
 
     if (data.nodes) {
-      data.nodes.forEach(nodeData => {
-        const node = this._deserializeNode(nodeData);
+      for (const nodeData of data.nodes) {
+        const node = await this._deserializeNodeWithVisualObject(nodeData);
         this._nodes.add(node);
-      });
+      }
     }
 
     // Update properties
     this.setProperty('name', this._name);
     this.setProperty('isModified', false);
 
-    console.log(`Document loaded: ${this.name}`);
+    console.log(`Document loaded: ${this.name} with ${this._nodes.length} nodes`);
   }
 
   // ==================== Metadata Management ====================
@@ -499,6 +488,16 @@ export class Document extends Observable {
       ...nodeData
     };
 
+    // Ensure created is a Date instance
+    if (!(node.created instanceof Date)) {
+      try {
+        const parsed = new Date(node.created);
+        node.created = isNaN(parsed.getTime()) ? new Date() : parsed;
+      } catch (e) {
+        node.created = new Date();
+      }
+    }
+
     return node;
   }
 
@@ -528,6 +527,9 @@ export class Document extends Observable {
   _serializeNode(node) {
     if (!node) return null;
 
+    // Deep clone properties to remove non-serializable objects
+    const serializableProperties = this._makeSerializable(node.properties || {});
+
     return {
       id: node.id,
       name: node.name,
@@ -535,10 +537,94 @@ export class Document extends Observable {
       parentId: node.parent ? node.parent.id : null,
       visible: node.visible,
       locked: node.locked,
-      geometry: node.geometry,
-      properties: node.properties,
-      created: node.created ? node.created.toISOString() : null
+      // Don't serialize geometry (it will be recreated from properties)
+      geometry: null,
+      properties: serializableProperties,
+      created: (() => {
+        if (!node?.created) return null;
+        if (node.created instanceof Date) return node.created.toISOString();
+        if (typeof node.created === 'string') return node.created;
+        if (typeof node.created === 'number') return new Date(node.created).toISOString();
+        try {
+          const d = new Date(node.created);
+          return isNaN(d.getTime()) ? null : d.toISOString();
+        } catch {
+          return null;
+        }
+      })()
     };
+  }
+
+  _makeSerializable(obj) {
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+
+    // Handle primitive types
+    if (typeof obj !== 'object') {
+      return obj;
+    }
+
+    // Handle arrays
+    if (Array.isArray(obj)) {
+      return obj.map(item => this._makeSerializable(item));
+    }
+
+    // Handle plain objects - use Object.keys to work with Proxy objects
+    const serializable = {};
+    const keys = Object.keys(obj);
+
+    for (const key of keys) {
+      try {
+        const value = obj[key];
+
+        // Skip non-serializable types
+        if (value === undefined ||
+            typeof value === 'function' ||
+            value instanceof Map ||
+            value instanceof Set ||
+            value instanceof WeakMap ||
+            value instanceof WeakSet) {
+          continue;
+        }
+
+        // Handle null explicitly
+        if (value === null) {
+          serializable[key] = null;
+          continue;
+        }
+
+        // Skip Three.js objects and other complex objects
+        if (typeof value === 'object') {
+          // Skip if it looks like a Three.js object or DOM element
+          if (value.isObject3D ||
+              value.isGeometry ||
+              value.isMaterial ||
+              value.isTexture ||
+              value.isBufferGeometry ||
+              value instanceof HTMLElement ||
+              value instanceof Window) {
+            continue;
+          }
+
+          // Skip circular references (basic check)
+          if (value === obj) {
+            continue;
+          }
+
+          // Recursively serialize plain objects and arrays
+          serializable[key] = this._makeSerializable(value);
+        } else {
+          // Primitive value
+          serializable[key] = value;
+        }
+      } catch (error) {
+        console.warn(`Failed to serialize property ${key}:`, error);
+        // Skip this property
+      }
+    }
+
+    return serializable;
   }
 
   _deserializeNode(nodeData) {
@@ -554,6 +640,187 @@ export class Document extends Observable {
       properties: nodeData.properties || {},
       created: nodeData.created ? new Date(nodeData.created) : new Date()
     });
+  }
+
+  async _deserializeNodeWithVisualObject(nodeData) {
+    if (!nodeData) return null;
+
+    // Create basic node
+    const node = this._createNode({
+      id: nodeData.id,
+      name: nodeData.name,
+      type: nodeData.type,
+      visible: nodeData.visible,
+      locked: nodeData.locked,
+      geometry: nodeData.geometry,
+      properties: nodeData.properties || {},
+      created: nodeData.created ? new Date(nodeData.created) : new Date()
+    });
+
+    // Recreate visualObject based on node type
+    if (nodeData.type && nodeData.properties) {
+      try {
+        const visualObject = await this._createVisualObjectForNode(nodeData.type, nodeData.properties, node.id);
+        if (visualObject) {
+          // CRITICAL: Set the nodeId BEFORE any create() calls so meshes can carry userData.nodeId
+          visualObject.nodeId = node.id;
+
+          // Mark as non-reactive to prevent Vue from proxying VisualObject instances
+          const nonReactiveVO = markRaw(visualObject);
+
+          node.visualObject = nonReactiveVO;
+          console.log(`Recreated visualObject for ${nodeData.name} (${nodeData.type}) with nodeId: ${node.id}`);
+        }
+      } catch (error) {
+        console.warn(`Failed to recreate visualObject for ${nodeData.name}:`, error);
+      }
+    }
+
+    return node;
+  }
+
+  async _createVisualObjectForNode(type, properties, nodeId = null) {
+    // Dynamically import visual object classes
+    try {
+      const {
+        BoxVisualObject,
+        SphereVisualObject,
+        CylinderVisualObject,
+        PlaneVisualObject,
+        ConeVisualObject,
+        TorusVisualObject
+      } = await import('../../cad-three/BasicShapes.js');
+
+      // Normalize type name (handle both "Box" and "BoxVisualObject")
+      const normalizedType = type.replace('VisualObject', '');
+
+      switch (normalizedType) {
+        case 'Box': {
+          const visualObject = new BoxVisualObject(nodeId, {
+            width: properties.width || 1,
+            height: properties.height || 1,
+            depth: properties.depth || 1
+          });
+
+          // Restore properties
+          if (properties.position) {
+            visualObject.setProperty('position', properties.position);
+          }
+          if (properties.rotation) {
+            visualObject.setProperty('rotation', properties.rotation);
+          }
+          if (properties.color) {
+            visualObject.setProperty('color', properties.color);
+          }
+          if (properties.material) {
+            visualObject.setProperty('material', properties.material);
+          }
+          if (properties.roughness !== undefined) {
+            visualObject.setProperty('roughness', properties.roughness);
+          }
+          if (properties.metalness !== undefined) {
+            visualObject.setProperty('metalness', properties.metalness);
+          }
+          if (properties.opacity !== undefined) {
+            visualObject.setProperty('opacity', properties.opacity);
+          }
+          // Set wireframe to false by default for solid objects that can be clicked anywhere
+          visualObject.setProperty('wireframe', properties.wireframe ?? false);
+
+          return visualObject;
+        }
+
+        case 'Sphere': {
+          const visualObject = new SphereVisualObject(nodeId, {
+            radius: properties.radius || 1,
+            widthSegments: properties.widthSegments || 32,
+            heightSegments: properties.heightSegments || 16
+          });
+
+          // Restore common properties
+          this._restoreCommonProperties(visualObject, properties);
+          return visualObject;
+        }
+
+        case 'Cylinder': {
+          const visualObject = new CylinderVisualObject(nodeId, {
+            radiusTop: properties.radiusTop !== undefined ? properties.radiusTop : 1,
+            radiusBottom: properties.radiusBottom !== undefined ? properties.radiusBottom : 1,
+            height: properties.height || 2,
+            radialSegments: properties.radialSegments || 32
+          });
+
+          this._restoreCommonProperties(visualObject, properties);
+          return visualObject;
+        }
+
+        case 'Plane': {
+          const visualObject = new PlaneVisualObject(nodeId, {
+            width: properties.width || 1,
+            height: properties.height || 1
+          });
+
+          this._restoreCommonProperties(visualObject, properties);
+          return visualObject;
+        }
+
+        case 'Cone': {
+          const visualObject = new ConeVisualObject(nodeId, {
+            radius: properties.radius || 1,
+            height: properties.height || 2,
+            radialSegments: properties.radialSegments || 32
+          });
+
+          this._restoreCommonProperties(visualObject, properties);
+          return visualObject;
+        }
+
+        case 'Torus': {
+          const visualObject = new TorusVisualObject(nodeId, {
+            radius: properties.radius || 1,
+            tube: properties.tube || 0.4,
+            radialSegments: properties.radialSegments || 16,
+            tubularSegments: properties.tubularSegments || 100
+          });
+
+          this._restoreCommonProperties(visualObject, properties);
+          return visualObject;
+        }
+
+        default:
+          console.warn(`Unknown node type: ${type} (normalized: ${normalizedType})`);
+          return null;
+      }
+    } catch (error) {
+      console.error(`Failed to create visual object for type ${type}:`, error);
+      return null;
+    }
+  }
+
+  _restoreCommonProperties(visualObject, properties) {
+    if (properties.position) {
+      visualObject.setProperty('position', properties.position);
+    }
+    if (properties.rotation) {
+      visualObject.setProperty('rotation', properties.rotation);
+    }
+    if (properties.color) {
+      visualObject.setProperty('color', properties.color);
+    }
+    if (properties.material) {
+      visualObject.setProperty('material', properties.material);
+    }
+    if (properties.roughness !== undefined) {
+      visualObject.setProperty('roughness', properties.roughness);
+    }
+    if (properties.metalness !== undefined) {
+      visualObject.setProperty('metalness', properties.metalness);
+    }
+    if (properties.opacity !== undefined) {
+      visualObject.setProperty('opacity', properties.opacity);
+    }
+    // Set wireframe to false by default for solid objects that can be clicked anywhere
+    visualObject.setProperty('wireframe', properties.wireframe ?? false);
   }
 
   _buildHierarchy(node) {

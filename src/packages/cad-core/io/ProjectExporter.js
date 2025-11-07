@@ -2,14 +2,12 @@
  * ProjectExporter - Export CAD projects to files
  *
  * Features:
- * - Export entire document with all objects
- * - Embed textures as base64 data URLs
- * - Include material information
- * - Support for metadata export
+ * - Export document with "Interactive Hallway" schema
+ * - Map boxes to standardized object format
+ * - Handle texture and color materials
+ * - Apply unit scaling (mm → m)
  * - Generate downloadable JSON files
  */
-
-import { ImageLoader } from './ImageLoader.js';
 
 export class ProjectExporter {
   /**
@@ -19,115 +17,122 @@ export class ProjectExporter {
    * @returns {Promise<Object>} Exported data
    */
   static async exportDocument(document, options = {}) {
-    const {
-      includeHistory = false,
-      embedTextures = true,
-      compressionLevel = 'none' // 'none', 'low', 'medium', 'high'
-    } = options;
-
     if (!document) {
       throw new Error('No document provided for export');
     }
 
     console.log(`Exporting document: ${document.name}`);
 
-    // Get base document data
-    const documentData = await document.saveToData();
+    // Determine unit scale (mm → m conversion)
+    const units = document.metadata?.units || 'mm';
+    const unitScale = units === 'mm' ? 0.001 : 1;
 
-    // Add export metadata
+    // Build "Interactive Hallway" schema
     const exportData = {
-      version: '1.0.0',
-      exportDate: new Date().toISOString(),
-      application: 'Three-CAD',
-      document: documentData,
-      textures: {},
-      materials: {}
+      name: document.name || 'Untitled',
+      description: '',
+      objects: []
     };
 
-    // Collect and embed textures if requested
-    if (embedTextures) {
-      await this._embedTextures(document, exportData);
+    // Get all nodes
+    const nodes = document.nodes?.items || [];
+
+    // Map Box nodes to objects
+    for (const node of nodes) {
+      if (node.type === 'Box') {
+        const obj = this._mapBoxToObject(node, unitScale);
+        exportData.objects.push(obj);
+      }
     }
 
-    // Add history if requested
-    if (includeHistory && document.history) {
-      exportData.history = this._serializeHistory(document.history);
-    }
-
-    console.log('Document export completed');
+    console.log(`Document export completed: ${exportData.objects.length} objects`);
     return exportData;
   }
 
   /**
-   * Embed textures as base64 data URLs
+   * Map a Box node to the Interactive Hallway object schema
    * @private
    */
-  static async _embedTextures(document, exportData) {
-    const textureMap = new Map();
+  static _mapBoxToObject(node, unitScale) {
+    const props = node.properties || {};
 
-    // Iterate through all nodes to find objects with textures
-    const nodes = document.nodes?.items || [];
+    // Geometry with unit scaling
+    const geometry = {
+      type: 'box',
+      width: (props.width ?? 1) * unitScale,
+      height: (props.height ?? 1) * unitScale,
+      depth: (props.depth ?? 1) * unitScale
+    };
 
-    for (const node of nodes) {
-      const visualObject = node.visualObject;
-      if (!visualObject) continue;
+    // Position with unit scaling
+    const position = {
+      x: (props.position?.x ?? 0) * unitScale,
+      y: (props.position?.y ?? 0) * unitScale,
+      z: (props.position?.z ?? 0) * unitScale
+    };
 
-      const textureFile = visualObject.getProperty('textureFile');
-      const textureUrl = visualObject.getProperty('textureUrl');
+    // Rotation (no scaling)
+    const rotation = {
+      x: props.rotation?.x ?? 0,
+      y: props.rotation?.y ?? 0,
+      z: props.rotation?.z ?? 0
+    };
 
-      if (textureUrl && !textureMap.has(textureUrl)) {
-        try {
-          // Convert blob URL to data URL
-          let dataUrl = textureUrl;
-          if (textureUrl.startsWith('blob:')) {
-            dataUrl = await ImageLoader.blobUrlToDataURL(textureUrl);
-          }
+    // Material mapping
+    const material = this._mapMaterial(props);
 
-          const textureId = this._generateTextureId(textureUrl);
-          textureMap.set(textureUrl, textureId);
-
-          exportData.textures[textureId] = {
-            dataUrl: dataUrl,
-            originalName: textureFile?.name || 'texture.png',
-            mimeType: textureFile?.type || 'image/png'
-          };
-
-          // Update the visual object reference to use texture ID
-          if (exportData.document.nodes) {
-            const nodeData = exportData.document.nodes.find(n => n.id === node.id);
-            if (nodeData) {
-              nodeData.textureId = textureId;
-            }
-          }
-        } catch (error) {
-          console.error(`Failed to embed texture: ${error.message}`);
-        }
-      }
-    }
-
-    console.log(`Embedded ${textureMap.size} textures`);
-  }
-
-  /**
-   * Generate unique texture ID
-   * @private
-   */
-  static _generateTextureId(url) {
-    return `texture_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-  }
-
-  /**
-   * Serialize history to JSON-compatible format
-   * @private
-   */
-  static _serializeHistory(history) {
     return {
-      canUndo: history.canUndo,
-      canRedo: history.canRedo,
-      currentIndex: history._currentIndex || 0,
-      stackSize: history._stack?.length || 0
+      name: node.name || node.id,
+      geometry,
+      material,
+      position,
+      rotation,
+      receiveShadow: true,
+      castShadow: false
     };
   }
+
+  /**
+   * Map node properties to material schema
+   * @private
+   */
+  static _mapMaterial(props) {
+    const roughness = props.roughness ?? 0.8;
+    const metalness = props.metalness ?? 0;
+
+    // Check for texture material
+    const materialType = props.material?.type;
+    const textureFile = props.material?.texture;
+
+    if (materialType === 'custom-texture' && textureFile && textureFile.trim() !== '') {
+      return {
+        map: textureFile,
+        roughness,
+        metalness
+      };
+    }
+
+    // Flat color material - convert hex to integer
+    const color = props.color || '#4caf50';
+    const colorInt = this._hexToInt(color);
+
+    return {
+      color: colorInt,
+      roughness,
+      metalness
+    };
+  }
+
+  /**
+   * Convert hex color string to integer
+   * @private
+   */
+  static _hexToInt(hexColor) {
+    // Remove # if present
+    const hex = hexColor.replace('#', '');
+    return parseInt(hex, 16);
+  }
+
 
   /**
    * Export document and download as file
@@ -173,42 +178,6 @@ export class ProjectExporter {
 
     console.log(`Document downloaded as: ${filename}`);
     return filename;
-  }
-
-  /**
-   * Export selection only (selected objects)
-   * @param {Document} cadDocument - Document containing selection
-   * @param {Array} selectedNodes - Array of selected nodes
-   * @param {Object} options - Export options
-   * @returns {Promise<Object>} Exported selection data
-   */
-  static async exportSelection(cadDocument, selectedNodes, options = {}) {
-    if (!selectedNodes || selectedNodes.length === 0) {
-      throw new Error('No nodes selected for export');
-    }
-
-    const exportData = {
-      version: '1.0.0',
-      exportDate: new Date().toISOString(),
-      application: 'Three-CAD',
-      type: 'selection',
-      nodes: [],
-      textures: {}
-    };
-
-    // Export selected nodes
-    for (const node of selectedNodes) {
-      const nodeData = cadDocument._serializeNode(node);
-      exportData.nodes.push(nodeData);
-    }
-
-    // Embed textures if needed
-    if (options.embedTextures !== false) {
-      const tempDoc = { nodes: { items: selectedNodes } };
-      await this._embedTextures(tempDoc, exportData);
-    }
-
-    return exportData;
   }
 
   /**

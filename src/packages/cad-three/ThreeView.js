@@ -9,7 +9,7 @@ import { CameraController } from './CameraController.js'
 import { VisualObject } from './VisualObject.js'
 import { ViewCube } from './ViewCube.js'
 import { SelectionOverlay } from './SelectionOverlay.js'
-import { saveStateDebounced, restoreScene, hasPersistedState, loadState } from '../cad-core/io/ScenePersistence.js'
+import { saveStateDebounced, restoreScene, hasPersistedState, loadState, saveViewSettingsOnly, restoreViewSettings, serializeViewSettings } from '../cad-core/io/ScenePersistence.js'
 import { isAutoSaveEnabled, isAutoRestoreEnabled, isSilentMode, getDebounceDelay } from '../cad-core/io/AutoSaveSettings.js'
 
 export class ThreeView extends Observable {
@@ -1137,6 +1137,22 @@ export class ThreeView extends Observable {
    * Silent operation - logs only on success or error
    */
   async _tryAutoRestore() {
+    // ---- HARD KILL SWITCH ----
+    const docMode =
+      this.options?.useDocumentPersistence === true ||
+      window.__CAD_USING_DOCUMENT_PERSISTENCE__ === true;
+
+    if (docMode) {
+      console.info('[RESTORE] Document mode ON → skip scene graph restore; restore view only.');
+      // Only restore camera/renderer, do not restore any Mesh
+      try {
+        await this._restoreViewSettingsOnly();
+      } catch (e) {
+        console.warn('[RESTORE] restoreViewSettings failed:', e);
+      }
+      return; // Critical: return directly, do not execute full restore logic
+    }
+
     if (!isAutoRestoreEnabled()) {
       console.log('ℹ️ Auto-restore disabled')
       return
@@ -1159,10 +1175,17 @@ export class ThreeView extends Observable {
         return
       }
 
-      // Restore scene
-      const restored = await restoreScene(savedState, this.renderer)
+      // Restore scene (pass this as threeView for mode detection)
+      const restored = await restoreScene(savedState, this, { viewOnly: false })
       if (!restored) {
         console.warn('⚠️ Failed to restore scene')
+        return
+      }
+
+      // If view-only restore, don't replace scene
+      if (restored.viewOnly) {
+        console.log('ℹ️ View-only restore - scene objects come from DocumentPersistence')
+        this._isRestoringState = false
         return
       }
 
@@ -1270,6 +1293,36 @@ export class ThreeView extends Observable {
   }
 
   /**
+   * Restore view settings only (camera, renderer) - no scene objects
+   * Used when DocumentPersistence is active
+   */
+  async _restoreViewSettingsOnly() {
+    try {
+      const savedState = await loadState()
+      if (!savedState) {
+        return
+      }
+
+      // Restore view settings if available
+      if (savedState.viewSettings) {
+        // Use viewSettings directly
+        const viewState = {
+          camera: savedState.viewSettings.camera,
+          renderer: savedState.viewSettings.renderer
+        }
+        restoreViewSettings(this, viewState)
+        console.log('✅ View settings restored (camera, renderer)')
+      } else if (savedState.camera && savedState.renderer) {
+        // Fallback: restore from legacy format
+        restoreViewSettings(this, savedState)
+        console.log('✅ View settings restored from legacy format')
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to restore view settings:', error)
+    }
+  }
+
+  /**
    * Trigger auto-save if enabled (debounced)
    * Called automatically after scene changes
    */
@@ -1278,7 +1331,18 @@ export class ThreeView extends Observable {
       return
     }
 
-    // Debounced save
+    // ---- HARD KILL SWITCH: Document mode always saves view only ----
+    const docMode =
+      this.options?.useDocumentPersistence === true ||
+      window.__CAD_USING_DOCUMENT_PERSISTENCE__ === true;
+
+    if (docMode) {
+      // Document mode: save view settings only (handled by saveSceneState)
+      this.saveSceneState()
+      return
+    }
+
+    // Legacy mode: full scene save
     this.saveSceneState()
   }
 
@@ -1289,6 +1353,17 @@ export class ThreeView extends Observable {
   async saveSceneState() {
     // Skip if auto-save is disabled or we're restoring
     if (!isAutoSaveEnabled() || this._isRestoringState) {
+      return
+    }
+
+    // ---- HARD KILL SWITCH: Document mode always saves view only ----
+    const docMode =
+      this.options?.useDocumentPersistence === true ||
+      window.__CAD_USING_DOCUMENT_PERSISTENCE__ === true;
+
+    if (docMode) {
+      // Only save camera/renderer → pure JSON → no DataCloneError
+      await saveViewSettingsOnly(this)
       return
     }
 
@@ -1456,7 +1531,7 @@ export class ThreeView extends Observable {
         return false
       }
 
-      const restored = await restoreScene(savedState, this.renderer)
+      const restored = await restoreScene(savedState, this, { viewOnly: false })
 
       if (!restored) {
         return false

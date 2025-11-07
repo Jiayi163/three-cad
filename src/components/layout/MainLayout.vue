@@ -578,6 +578,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApplicationStore } from '@/stores/application'
+import { history } from '@/packages/cad-core/foundation/historyInstance.js'
 import { usePanelState } from '@/composables/usePanelState'
 import { useResponsiveLayout } from '@/composables/useResponsiveLayout'
 import { usePanelPositioning } from '@/composables/usePanelPositioning'
@@ -704,13 +705,9 @@ export default {
       return appStore.activeDocument?.selectedNodes?.length || 0
     })
 
-    const canUndo = computed(() => {
-      return appStore.canUndo || false
-    })
-
-    const canRedo = computed(() => {
-      return appStore.canRedo || false
-    })
+    // Reactive bridge to history's canUndo/canRedo
+    const canUndo = ref(history.canUndo)
+    const canRedo = ref(history.canRedo)
 
     // Methods
     const navigateTo = (path) => {
@@ -726,7 +723,8 @@ export default {
       switch (action) {
         case 'undo':
           try {
-            appStore.undo()
+            history.undo()
+            appStore.syncSelectionState()
             console.log('Undo operation completed')
           } catch (error) {
             console.error('Undo failed:', error)
@@ -734,7 +732,8 @@ export default {
           break
         case 'redo':
           try {
-            appStore.redo()
+            history.redo()
+            appStore.syncSelectionState()
             console.log('Redo operation completed')
           } catch (error) {
             console.error('Redo failed:', error)
@@ -797,15 +796,15 @@ export default {
     }
 
     const setActiveTool = (tool) => {
-      console.log('🔧 MainLayout: setActiveTool called with:', tool)
+      console.log('MainLayout: setActiveTool called with:', tool)
       activeTool.value = tool
       currentOperation.value = `${tool} tool active`
-      console.log('🔧 MainLayout: Emitting tool-change event:', tool)
+      console.log('MainLayout: Emitting tool-change event:', tool)
       emit('tool-change', tool)
     }
 
     const handleBoxClick = async () => {
-      console.log('🔧 MainLayout: Box button clicked directly!')
+      console.log('MainLayout: Box button clicked directly!')
       setActiveTool('box')
 
       // The tool change will trigger interactive creation, no need for direct execution
@@ -1182,12 +1181,34 @@ export default {
       document.addEventListener('click', hideContextMenu)
       // Update legend pointer events on mount
       updateLegendPointerEvents()
+
+      // Subscribe to history changes to keep toolbar buttons enabled state in sync
+      const offUndo = history.onPropertyChanged('canUndo', (newValue) => {
+        canUndo.value = !!newValue
+      })
+      const offRedo = history.onPropertyChanged('canRedo', (newValue) => {
+        canRedo.value = !!newValue
+      })
+
+      // Store unsubscribers on instance for cleanup
+      ;(window.__MAIN_LAYOUT_UNDO_OFF ||= []).push(offUndo)
+      ;(window.__MAIN_LAYOUT_REDO_OFF ||= []).push(offRedo)
     })
 
     onUnmounted(() => {
       document.removeEventListener('keydown', handleKeydown)
       document.removeEventListener('contextmenu', showContextMenu)
       document.removeEventListener('click', hideContextMenu)
+
+      // Cleanup history listeners
+      if (window.__MAIN_LAYOUT_UNDO_OFF) {
+        window.__MAIN_LAYOUT_UNDO_OFF.forEach(fn => { try { fn() } catch {} })
+        window.__MAIN_LAYOUT_UNDO_OFF.length = 0
+      }
+      if (window.__MAIN_LAYOUT_REDO_OFF) {
+        window.__MAIN_LAYOUT_REDO_OFF.forEach(fn => { try { fn() } catch {} })
+        window.__MAIN_LAYOUT_REDO_OFF.length = 0
+      }
     })
 
     return {

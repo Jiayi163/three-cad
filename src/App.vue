@@ -1,5 +1,8 @@
 <script>
 import { RouterView } from 'vue-router'
+import { onMounted, onUnmounted, computed } from 'vue'
+import { history } from './packages/cad-core/foundation/historyInstance.js'
+import { useApplicationStore } from './stores/application.js'
 import packageInfo from '../package.json'
 
 export default {
@@ -7,12 +10,90 @@ export default {
   components: {
     RouterView
   },
-  computed: {
-    version() {
-      return `v${packageInfo.version}`
-    },
-    isDevelopment() {
-      return import.meta.env.DEV
+  setup() {
+    // Use singleton history directly
+    const canUndo = computed(() => history.canUndo)
+    const canRedo = computed(() => history.canRedo)
+
+    // Get application store for copy/paste
+    const appStore = useApplicationStore()
+
+    // Keyboard shortcut handler
+    const handleKeydown = (event) => {
+      // Avoid interfering with text inputs
+      const target = event.target
+      const tagName = target?.tagName?.toUpperCase()
+      if (['INPUT', 'TEXTAREA'].includes(tagName) || target?.isContentEditable) {
+        return
+      }
+
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+      const isMeta = event.ctrlKey || event.metaKey
+
+      if (!isMeta) return
+
+      const key = event.key.toLowerCase()
+
+      // Copy: Ctrl/Cmd+C
+      if (key === 'c') {
+        event.preventDefault()
+        console.log('[APP] Keyboard Copy triggered')
+        if (appStore.isInitialized) {
+          appStore.copyObjects()
+        }
+        return
+      }
+
+      // Paste: Ctrl/Cmd+V
+      if (key === 'v') {
+        event.preventDefault()
+        console.log('[APP] Keyboard Paste triggered')
+        if (appStore.isInitialized) {
+          appStore.pasteObjects()
+        }
+        return
+      }
+
+      // Undo: Ctrl/Cmd+Z (no Shift)
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault()
+        console.log('[APP] Keyboard Undo triggered, canUndo:', canUndo.value)
+        if (canUndo.value) {
+          history.undo()
+        }
+        return
+      }
+
+      // Redo: Ctrl+Shift+Z / Cmd+Shift+Z (and Ctrl+Y on Windows)
+      if ((key === 'z' && event.shiftKey) || (key === 'y' && !isMac)) {
+        event.preventDefault()
+        console.log('[APP] Keyboard Redo triggered, canRedo:', canRedo.value)
+        if (canRedo.value) {
+          history.redo()
+        }
+        return
+      }
+    }
+
+    // Add keyboard listener on mount
+    onMounted(() => {
+      window.addEventListener('keydown', handleKeydown)
+      console.log('[APP] Keyboard shortcuts initialized:')
+      console.log('  - Ctrl/Cmd+C (Copy)')
+      console.log('  - Ctrl/Cmd+V (Paste)')
+      console.log('  - Ctrl/Cmd+Z (Undo)')
+      console.log('  - Ctrl/Cmd+Shift+Z / Ctrl+Y (Redo)')
+      console.log('[APP] History instance:', history)
+    })
+
+    // Remove listener on unmount
+    onUnmounted(() => {
+      window.removeEventListener('keydown', handleKeydown)
+    })
+
+    return {
+      version: `v${packageInfo.version}`,
+      isDevelopment: import.meta.env.DEV
     }
   }
 }
@@ -31,11 +112,11 @@ export default {
         </div>
       </div>
     </header>
-    
+
     <main class="app-main">
       <RouterView />
     </main>
-    
+
     <!-- Development-only footer -->
     <footer v-if="isDevelopment" class="app-footer">
       <div class="footer-content">
@@ -182,15 +263,15 @@ body {
     gap: 0.5rem;
     padding: 1rem;
   }
-  
+
   .header-info {
     align-items: center;
   }
-  
+
   .app-title {
     font-size: 1.3rem;
   }
-  
+
   .footer-content {
     padding: 0 1rem;
   }
