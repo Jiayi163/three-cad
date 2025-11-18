@@ -46,10 +46,10 @@ export class PathResolver {
    * Resolve asset path relative to JSON file location
    * @param {string} assetPath - Asset path from JSON
    * @param {string} jsonFilePath - Path to JSON file (optional)
-   * @param {Object} extractedAssets - Not used (kept for compatibility)
+   * @param {Map} extractedAssets - Extracted assets from ZIP (optional)
    * @returns {Object} Resolved path info with possible paths to try
    */
-  static resolveAssetPath(assetPath, jsonFilePath = null, extractedAssets = {}) {
+  static resolveAssetPath(assetPath, jsonFilePath = null, extractedAssets = null) {
     if (!assetPath) {
       return { paths: [], extractedAsset: null };
     }
@@ -57,13 +57,55 @@ export class PathResolver {
     const normalizedPath = this.normalizePath(assetPath);
     const fileName = normalizedPath.split('/').pop();
     const paths = [];
+    let extractedAsset = null;
+
+    console.log(`🔍 PathResolver: Resolving asset path: "${assetPath}"`);
+    console.log(`   Normalized: "${normalizedPath}"`);
+    console.log(`   Filename: "${fileName}"`);
+    console.log(`   Has extractedAssets: ${extractedAssets instanceof Map}`);
+
+    // If we have extracted assets from a ZIP, check if this asset is available
+    if (extractedAssets && extractedAssets instanceof Map) {
+      console.log(`   📦 Checking ${extractedAssets.size} extracted assets...`);
+      
+      // Try to find the asset by normalized path or filename
+      const assetKey = normalizedPath.replace('./', '');
+      console.log(`   Looking for key: "${assetKey}"`);
+      
+      if (extractedAssets.has(assetKey)) {
+        extractedAsset = extractedAssets.get(assetKey);
+        // Add the blob URL as the first path to try
+        paths.push(extractedAsset.blobUrl);
+        console.log(`   ✅ Found exact match! Using blob URL: ${extractedAsset.blobUrl}`);
+      } else if (extractedAssets.has(`assets/${fileName}`)) {
+        // Try just the filename in assets folder
+        extractedAsset = extractedAssets.get(`assets/${fileName}`);
+        paths.push(extractedAsset.blobUrl);
+        console.log(`   ✅ Found by filename in assets/! Using blob URL: ${extractedAsset.blobUrl}`);
+      } else {
+        // Search for filename match in any path
+        console.log(`   🔎 Searching for filename match in all keys...`);
+        for (const [key, value] of extractedAssets) {
+          if (key.endsWith(fileName)) {
+            extractedAsset = value;
+            paths.push(value.blobUrl);
+            console.log(`   ✅ Found by filename match (key: "${key}")! Using blob URL: ${value.blobUrl}`);
+            break;
+          }
+        }
+        if (!extractedAsset) {
+          console.warn(`   ⚠️ No match found in extractedAssets`);
+          console.warn(`   Available keys:`, Array.from(extractedAssets.keys()));
+        }
+      }
+    }
 
     // Build list of possible paths to try
     // 1. Original path (normalized)
     paths.push(normalizedPath);
 
     // 2. If JSON file path is provided, resolve relative to it
-    if (jsonFilePath) {
+    if (jsonFilePath && jsonFilePath.includes('/')) {
       const jsonDir = jsonFilePath.substring(0, jsonFilePath.lastIndexOf('/') + 1);
       const relativePath = normalizedPath.replace('./', '');
       paths.push(`${jsonDir}${relativePath}`);

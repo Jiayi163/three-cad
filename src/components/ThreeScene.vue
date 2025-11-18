@@ -293,14 +293,24 @@ export default {
       // Apply skybox/background if available
       if (document._importSkybox && threeView.value) {
         console.log(`🌄 Applying skybox: ${document._importSkybox}`)
+        console.log(`   Original: ${document._importSkyboxOriginal}`)
         try {
           const skyboxPath = document._importSkybox
           const skyboxOptions = document._importSkyboxOptions || {}
           const jsonFilePath = skyboxOptions.jsonFilePath || null
+          const extractedAssets = skyboxOptions.extractedAssets || null
+          
+          console.log(`   Skybox options:`, {
+            jsonFilePath,
+            hasExtractedAssets: extractedAssets instanceof Map,
+            extractedAssetsSize: extractedAssets?.size
+          })
           
           // Use PathResolver to resolve skybox path
-          const pathInfo = PathResolver.resolveAssetPath(skyboxPath, jsonFilePath, {})
+          const pathInfo = PathResolver.resolveAssetPath(skyboxPath, jsonFilePath, extractedAssets)
           const skyboxFileName = pathInfo.fileName
+          
+          console.log(`   PathResolver returned ${pathInfo.paths.length} paths to try`)
           
           let skyboxBlob = null
           let skyboxFile = null
@@ -311,12 +321,19 @@ export default {
             try {
               console.log(`   Trying to load skybox from: ${path}`)
               const response = await fetch(path)
+              console.log(`      Response status: ${response.status} ${response.statusText}`)
+              console.log(`      Content-Type: ${response.headers.get('content-type')}`)
+              console.log(`      Content-Length: ${response.headers.get('content-length')}`)
               if (response.ok) {
                 skyboxBlob = await response.blob()
+                console.log(`      Blob size: ${(skyboxBlob.size / 1024 / 1024).toFixed(2)} MB`)
+                console.log(`      Blob type: ${skyboxBlob.type}`)
                 skyboxFile = new File([skyboxBlob], skyboxFileName, { type: 'image/x-exr' })
                 console.log(`   ✅ Skybox loaded from: ${path}`)
                 loadedFromPath = true
                 break
+              } else {
+                console.log(`   ❌ HTTP error: ${response.status}`)
               }
             } catch (e) {
               // Try next path

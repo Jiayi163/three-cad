@@ -11,6 +11,7 @@
 
 import { ImageLoader } from './ImageLoader.js';
 import { PathResolver } from './PathResolver.js';
+import JSZip from 'jszip';
 import * as THREE from 'three';
 
 export class ProjectImporter {
@@ -191,8 +192,8 @@ export class ProjectImporter {
   }
 
   /**
-   * Import from file
-   * @param {File} file - JSON file to import
+   * Import from file (JSON or ZIP)
+   * @param {File} file - JSON or ZIP file to import
    * @param {CADApplication} application - Application instance
    * @param {Object} options - Import options
    * @param {ThreeView} options.threeView - ThreeView instance to apply skybox/background
@@ -203,8 +204,17 @@ export class ProjectImporter {
       throw new Error('No file provided');
     }
 
-    if (!file.name.toLowerCase().endsWith('.json')) {
-      throw new Error('Invalid file format. Expected .json file');
+    const fileName = file.name.toLowerCase();
+    const isJson = fileName.endsWith('.json');
+    const isZip = fileName.endsWith('.zip');
+
+    if (!isJson && !isZip) {
+      throw new Error('Invalid file format. Expected .json or .zip file');
+    }
+
+    // Handle ZIP files
+    if (isZip) {
+      return await this._importFromZip(file, application, options);
     }
 
     // Handle JSON files
@@ -258,6 +268,89 @@ export class ProjectImporter {
   }
 
   /**
+   * Import from ZIP package
+   * @private
+   */
+  static async _importFromZip(zipFile, application, options = {}) {
+    console.log('📦 Importing ZIP package...');
+    
+    try {
+      // Load ZIP file
+      const zip = await JSZip.loadAsync(zipFile);
+      
+      // Find JSON file in ZIP (should be at root level)
+      const jsonFiles = Object.keys(zip.files).filter(name => 
+        name.endsWith('.json') && !name.includes('/')
+      );
+      
+      if (jsonFiles.length === 0) {
+        throw new Error('No JSON file found in ZIP package');
+      }
+      
+      const jsonFileName = jsonFiles[0];
+      console.log(`   Found JSON: ${jsonFileName}`);
+      
+      // Extract JSON content
+      const jsonContent = await zip.file(jsonFileName).async('text');
+      const importData = JSON.parse(jsonContent);
+      
+      // Extract assets folder
+      const extractedAssets = new Map();
+      const assetFiles = Object.keys(zip.files).filter(name => 
+        name.startsWith('assets/') && !zip.files[name].dir
+      );
+      
+      console.log(`   Found ${assetFiles.length} asset files`);
+      
+      // Extract each asset file as a blob URL
+      for (const assetPath of assetFiles) {
+        try {
+          const blob = await zip.file(assetPath).async('blob');
+          const blobUrl = URL.createObjectURL(blob);
+          const fileName = assetPath.split('/').pop();
+          
+          extractedAssets.set(assetPath, {
+            blob: blob,
+            blobUrl: blobUrl,
+            fileName: fileName,
+            originalPath: assetPath
+          });
+          
+          console.log(`   ✓ Extracted: ${assetPath} (${(blob.size / 1024).toFixed(2)} KB) -> ${blobUrl}`);
+        } catch (error) {
+          console.warn(`   ⚠️ Failed to extract ${assetPath}:`, error);
+        }
+      }
+      
+      // Log all extracted assets for debugging
+      console.log(`   📦 Extracted assets map contents:`);
+      for (const [key, value] of extractedAssets) {
+        console.log(`      "${key}" -> ${value.blobUrl} (${value.fileName})`);
+      }
+      
+      // Check if this is a 3CAD scene format
+      if (this._isThreeCADSceneFormat(importData)) {
+        console.log('📦 Detected 3CAD scene format in ZIP...');
+        
+        const cadDocument = await this.importThreeCADScene(importData, application, {
+          ...options,
+          jsonFilePath: jsonFileName,
+          extractedAssets: extractedAssets // Pass extracted assets
+        });
+        
+        return cadDocument;
+      } else {
+        // Standard Three-CAD project format
+        console.log('📦 Detected Three-CAD project format in ZIP...');
+        const cadDocument = await this.importDocument(importData, application);
+        return cadDocument;
+      }
+    } catch (error) {
+      throw new Error(`Failed to import ZIP file: ${error.message}`);
+    }
+  }
+
+  /**
    * Check if import data is in 3CAD scene format
    * @private
    */
@@ -305,7 +398,8 @@ export class ProjectImporter {
       cadDocument._importSkybox = normalizedSkyboxPath;
       cadDocument._importSkyboxOriginal = sceneData.skybox; // Keep original for reference
       cadDocument._importSkyboxOptions = {
-        jsonFilePath: options.jsonFilePath || null
+        jsonFilePath: options.jsonFilePath || null,
+        extractedAssets: options.extractedAssets || null
       };
       console.log(`🌄 Skybox found: ${sceneData.skybox} (normalized: ${normalizedSkyboxPath})`);
     }
@@ -320,7 +414,8 @@ export class ProjectImporter {
     for (const obj of sceneData.objects) {
       try {
         const node = await this._convertThreeCADObjectToNode(obj, cadDocument, {
-          jsonFilePath: options.jsonFilePath
+          jsonFilePath: options.jsonFilePath,
+          extractedAssets: options.extractedAssets
         });
         if (node && node.visualObject) {
           importedNodes.push(node);
@@ -465,20 +560,28 @@ export class ProjectImporter {
         // Texture material - actually load the texture
         try {
           const jsonFilePath = options.jsonFilePath || null;
+          const extractedAssets = options.extractedAssets || null;
           
           // Resolve texture path
-          const pathInfo = PathResolver.resolveAssetPath(material.map, jsonFilePath, {});
+          const pathInfo = PathResolver.resolveAssetPath(material.map, jsonFilePath, extractedAssets);
           
           // Try to load texture from resolved paths
           let textureLoaded = false;
+          console.log(`   🔍 Attempting to load texture for "${obj.name}"...`);
+          console.log(`   📋 Trying ${pathInfo.paths.length} possible paths for: ${material.map}`);
+          
           for (const path of pathInfo.paths) {
             try {
+              console.log(`      Trying: ${path}`);
+              
               // Use setTextureFromUrl which properly loads and applies the texture
               const textureOptions = {
-                repeatX: material.repeat?.x || 1,
-                repeatY: material.repeat?.y || 1,
                 roughness: material.roughness !== undefined ? material.roughness : 0.8,
-                metalness: material.metalness !== undefined ? material.metalness : 0
+                metalness: material.metalness !== undefined ? material.metalness : 0,
+                textureOptions: {
+                  repeatX: material.repeat?.x || 1,
+                  repeatY: material.repeat?.y || 1
+                }
               };
               
               await visualObject.setTextureFromUrl(path, textureOptions);
@@ -494,10 +597,16 @@ export class ProjectImporter {
                 visualObject.setProperty('textureRepeatY', material.repeat.y || 1);
               }
               
-              console.log(`   ✅ Texture loaded from: ${path}`);
+              // Set roughness and metalness properties
+              visualObject.setProperty('roughness', material.roughness !== undefined ? material.roughness : 0.8);
+              visualObject.setProperty('metalness', material.metalness !== undefined ? material.metalness : 0);
+              
+              console.log(`   ✅ Texture loaded successfully from: ${path}`);
+              console.log(`      Material: roughness=${textureOptions.roughness}, metalness=${textureOptions.metalness}, repeat=(${textureOptions.textureOptions.repeatX}, ${textureOptions.textureOptions.repeatY})`);
               textureLoaded = true;
               break;
             } catch (error) {
+              console.log(`      ❌ Failed: ${error.message}`);
               // Try next path
               continue;
             }
@@ -650,10 +759,66 @@ export class ProjectImporter {
 
     const fileName = file.name.toLowerCase();
     const isJson = fileName.endsWith('.json');
+    const isZip = fileName.endsWith('.zip');
 
-    if (!isJson) {
-      result.errors.push('Invalid file format. Expected .json file');
+    if (!isJson && !isZip) {
+      result.errors.push('Invalid file format. Expected .json or .zip file');
       return result;
+    }
+
+    // Handle ZIP files
+    if (isZip) {
+      try {
+        const zip = await JSZip.loadAsync(file);
+        const jsonFiles = Object.keys(zip.files).filter(name => 
+          name.endsWith('.json') && !name.includes('/')
+        );
+        
+        if (jsonFiles.length === 0) {
+          result.errors.push('No JSON file found in ZIP package');
+          return result;
+        }
+        
+        const jsonFileName = jsonFiles[0];
+        const jsonContent = await zip.file(jsonFileName).async('text');
+        const data = JSON.parse(jsonContent);
+        
+        // Count assets
+        const assetFiles = Object.keys(zip.files).filter(name => 
+          name.startsWith('assets/') && !zip.files[name].dir
+        );
+        
+        result.info.isZipPackage = true;
+        result.info.hasAssets = assetFiles.length > 0;
+        result.info.assetsCount = assetFiles.length;
+        
+        // Validate the JSON content
+        const isThreeCADScene = this._isThreeCADSceneFormat(data);
+        
+        if (isThreeCADScene) {
+          result.info.format = '3CAD Scene';
+          result.info.documentName = data.name || 'Untitled Scene';
+          result.info.nodeCount = data.objects?.length || 0;
+          result.info.objectTypes = {};
+          
+          data.objects?.forEach(obj => {
+            const type = obj.geometry?.type || 'unknown';
+            result.info.objectTypes[type] = (result.info.objectTypes[type] || 0) + 1;
+          });
+        } else {
+          result.info.format = 'Three-CAD Project';
+          result.info.documentName = data.document?.name || 'Untitled';
+          result.info.nodeCount = data.document?.nodes?.length || 0;
+          result.info.textureCount = Object.keys(data.textures || {}).length;
+        }
+        
+        result.info.fileSize = (file.size / 1024).toFixed(2) + ' KB';
+        result.valid = true;
+        return result;
+      } catch (error) {
+        result.errors.push(`Failed to parse ZIP file: ${error.message}`);
+        return result;
+      }
     }
 
       try {

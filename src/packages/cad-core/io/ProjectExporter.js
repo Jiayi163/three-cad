@@ -22,7 +22,7 @@ export class ProjectExporter {
   /**
    * Export document to Three-CAD project format (for import/export)
    * This format is compatible with ProjectImporter
-   * 
+   *
    * @param {Document} document - Document to export
    * @param {Object} options - Export options
    * @param {boolean} options.embedTextures - Embed textures as data URLs (default: false)
@@ -40,7 +40,7 @@ export class ProjectExporter {
     const documentData = await document.saveToData();
 
     // Collect textures if embedding is requested
-    const textures = options.embedTextures 
+    const textures = options.embedTextures
       ? await this._collectTextures(document)
       : {};
 
@@ -60,7 +60,7 @@ export class ProjectExporter {
   /**
    * Export document to simple object array format (for 3CAD scene conversion)
    * This is a simplified format with just name, description, and objects array
-   * 
+   *
    * @param {Document} document - Document to export
    * @param {Object} options - Export options
    * @returns {Promise<Object>} Simple export data with objects array
@@ -117,7 +117,7 @@ export class ProjectExporter {
         try {
           const textureId = `texture_${node.id}`;
           const dataUrl = await this._fileToDataURL(textureFile);
-          
+
           textures[textureId] = {
             dataUrl: dataUrl,
             originalName: textureFile.name,
@@ -217,17 +217,17 @@ export class ProjectExporter {
 
     if ((materialType === 'custom-texture' && textureFile && textureFile.trim() !== '') || textureUrl) {
       const texturePath = textureFile || textureUrl;
-      
+
       // Normalize texture path for export (use relative path)
       const normalizedPath = PathResolver.normalizePath(texturePath);
-      
+
       // Build material with texture
       const material = {
         map: normalizedPath,
         roughness,
         metalness
       };
-      
+
       // Add texture repeat if available
       if (props.textureRepeatX !== undefined || props.textureRepeatY !== undefined) {
         material.repeat = {
@@ -235,7 +235,7 @@ export class ProjectExporter {
           y: props.textureRepeatY ?? 1
         };
       }
-      
+
       return material;
     }
 
@@ -325,10 +325,10 @@ export class ProjectExporter {
 
   /**
    * Convert basic export JSON to full 3CAD scene format
-   * 
+   *
    * Takes a simple export (with only name, description, objects) and wraps it
    * in a complete 3CAD scene structure with camera, renderer, lights, player, and controls.
-   * 
+   *
    * @param {Object} userExport - Current export JSON with structure: { name, description, objects }
    * @param {Object} options - Conversion options
    * @param {Object} options.camera - Optional camera overrides
@@ -338,14 +338,14 @@ export class ProjectExporter {
    * @param {Object} options.controls - Optional controls overrides
    * @param {boolean} options.addPhysicsToObjects - If true, adds physics: { enabled: false } to each object (default: false)
    * @returns {Object} Complete 3CAD scene JSON
-   * 
+   *
    * @example
    * const basicExport = {
    *   name: "My Scene",
    *   description: "",
    *   objects: [{ geometry: {...}, position: {...} }]
    * };
-   * 
+   *
    * const threeCADScene = ProjectExporter.convertToThreeCADScene(basicExport, {
    *   addPhysicsToObjects: true
    * });
@@ -439,9 +439,9 @@ export class ProjectExporter {
 
   /**
    * Export document directly in 3CAD scene format
-   * 
+   *
    * Convenience method that exports the document and converts it to 3CAD format in one step.
-   * 
+   *
    * @param {Document} document - Document to export
    * @param {Object} options - Export and conversion options
    * @param {boolean} options.addPhysicsToObjects - Add physics defaults to objects (default: false)
@@ -463,23 +463,122 @@ export class ProjectExporter {
       renderer,
       lights,
       player,
-      controls
+      controls,
+      threeView
     } = options;
+
+    // Capture actual scene state from ThreeView if available
+    let actualCamera = camera;
+    let actualRenderer = renderer;
+    let actualLights = lights;
+
+    if (threeView) {
+      // Extract camera settings
+      if (!actualCamera && threeView.camera) {
+        const cam = threeView.camera;
+        actualCamera = {
+          position: {
+            x: cam.position.x,
+            y: cam.position.y,
+            z: cam.position.z
+          },
+          fov: cam.fov || 75,
+          near: cam.near || 0.1,
+          far: cam.far || 1000
+        };
+      }
+
+      // Extract renderer settings
+      if (!actualRenderer && threeView.renderer) {
+        const rend = threeView.renderer;
+        actualRenderer = {
+          shadows: rend.shadowMap?.enabled || false,
+          physicallyCorrectLights: true, // Default to true for PBR
+          toneMapping: rend.toneMapping || 1, // ACESFilmicToneMapping = 4
+          toneMappingExposure: rend.toneMappingExposure || 1.0
+        };
+      }
+
+      // Extract lights from scene
+      if (!actualLights && threeView.scene) {
+        actualLights = [];
+        threeView.scene.traverse((object) => {
+          if (object.isLight) {
+            const lightData = {
+              type: this._getLightType(object),
+              color: object.color ? object.color.getHex() : 0xffffff,
+              intensity: object.intensity !== undefined ? object.intensity : 1
+            };
+
+            // Add light-specific properties
+            if (object.isDirectionalLight || object.isSpotLight) {
+              lightData.position = {
+                x: object.position.x,
+                y: object.position.y,
+                z: object.position.z
+              };
+              if (object.target) {
+                lightData.target = {
+                  x: object.target.position.x,
+                  y: object.target.position.y,
+                  z: object.target.position.z
+                };
+              }
+            }
+
+            if (object.isPointLight) {
+              lightData.position = {
+                x: object.position.x,
+                y: object.position.y,
+                z: object.position.z
+              };
+              lightData.distance = object.distance || 0;
+              lightData.decay = object.decay || 1;
+            }
+
+            if (object.isSpotLight) {
+              lightData.angle = object.angle || Math.PI / 3;
+              lightData.penumbra = object.penumbra || 0;
+            }
+
+            actualLights.push(lightData);
+          }
+        });
+
+        // If no lights found, use default
+        if (actualLights.length === 0) {
+          actualLights = undefined; // Let convertToThreeCADScene use default
+        }
+      }
+    }
 
     // Convert to 3CAD format
     return this.convertToThreeCADScene(basicExport, {
       addPhysicsToObjects,
-      camera,
-      renderer,
-      lights,
+      camera: actualCamera,
+      renderer: actualRenderer,
+      lights: actualLights,
       player,
       controls
     });
   }
 
   /**
+   * Get light type string from Three.js light object
+   * @private
+   */
+  static _getLightType(lightObject) {
+    if (lightObject.isAmbientLight) return 'ambient';
+    if (lightObject.isDirectionalLight) return 'directional';
+    if (lightObject.isPointLight) return 'point';
+    if (lightObject.isSpotLight) return 'spot';
+    if (lightObject.isHemisphereLight) return 'hemisphere';
+    return 'ambient'; // Default fallback
+  }
+
+  /**
    * Export document in 3CAD format and download as file
-   * 
+   *
    * @param {Document} cadDocument - Document to export
    * @param {string} filename - Filename for download
    * @param {Object} options - Export and conversion options
@@ -552,7 +651,7 @@ export class ProjectExporter {
 
   /**
    * Export as ZIP package with assets folder
-   * 
+   *
    * Folder structure:
    *   scene.json
    *   assets/
@@ -560,38 +659,38 @@ export class ProjectExporter {
    *       image1.png
    *       image2.jpg
    *     evening_road_01_puresky_1k.exr
-   * 
+   *
    * All paths in JSON use relative paths: ./assets/...
-   * 
+   *
    * @private
    */
   static async _exportAsZipPackage(sceneData, baseFilename, document, options, assetsFolderName = 'assets') {
     const zip = new JSZip();
-    
+
     // Create assets folder structure
     const assetsFolder = zip.folder(assetsFolderName);
     const texturesFolder = assetsFolder.folder('textures');
-    
+
     // Track all assets for path updates
     const assetMap = new Map(); // Map: original path/name -> { blob, finalPath, type }
     const nodes = document.nodes?.items || [];
-    
+
     console.log(`📦 Collecting assets for export (${nodes.length} nodes)...`);
-    
+
     // Collect texture files from nodes
     for (const node of nodes) {
       const visualObject = node.visualObject;
       if (!visualObject) continue;
-      
+
       const textureFile = visualObject.getProperty('textureFile');
       const textureUrl = visualObject.getProperty('textureUrl');
       const material = node.properties?.material;
-      
+
       // Get texture file or URL
       let textureSource = null;
       let textureName = null;
       let originalPath = null;
-      
+
       if (textureFile && textureFile instanceof File) {
         textureSource = textureFile;
         textureName = textureFile.name;
@@ -612,7 +711,7 @@ export class ProjectExporter {
         const texturePath = material.texture;
         originalPath = texturePath;
         textureName = texturePath.split('/').pop() || `texture_${node.id}.png`;
-        
+
         // Try to fetch if it's a URL
         if (texturePath.startsWith('http://') || texturePath.startsWith('https://')) {
           try {
@@ -632,7 +731,7 @@ export class ProjectExporter {
           }
         }
       }
-      
+
       // Add texture to ZIP if we have it
       if (textureSource && textureName) {
         // Use unique filename if duplicate
@@ -644,7 +743,7 @@ export class ProjectExporter {
           finalName = `${base}_${counter}.${ext}`;
           counter++;
         }
-        
+
         const finalPath = `textures/${finalName}`;
         assetMap.set(finalPath, {
           blob: textureSource,
@@ -652,16 +751,16 @@ export class ProjectExporter {
           type: 'texture',
           originalPath: originalPath
         });
-        
+
         await texturesFolder.file(finalName, textureSource);
         console.log(`   ✓ Added texture: ${finalPath}`);
-        
+
           // Update scene data to use relative path (normalized)
           if (material) {
             const relativePath = `./${assetsFolderName}/${finalPath}`;
             material.map = PathResolver.normalizePath(relativePath);
           }
-          
+
           // Also update the object's material in the scene data
           // Find the object in sceneData.objects and update its material
           const nodeId = node.id;
@@ -672,66 +771,81 @@ export class ProjectExporter {
           }
       }
     }
-    
+
     // Collect skybox/background file if available
     if (options.threeView && options.threeView._environmentData) {
       const envData = options.threeView._environmentData;
       if (envData.kind === 'exr' && envData.imageName) {
         // Try to get the EXR file
-        // Check if we have the file in the environment data
         let skyboxBlob = null;
         let skyboxName = envData.imageName;
-        
-        // Try to fetch from the stored path/URL if available
-        if (envData.imageUrl) {
+
+        // Method 1: Use the File object directly if available
+        if (envData.imageFile && envData.imageFile instanceof File) {
+          skyboxBlob = envData.imageFile;
+          console.log(`   ✓ Found skybox File object: ${skyboxName}`);
+        }
+        // Method 2: Try to fetch from the stored blob URL if available
+        else if (envData.imageUrl) {
           try {
             const response = await fetch(envData.imageUrl);
-            skyboxBlob = await response.blob();
-            console.log(`   ✓ Found skybox file: ${skyboxName}`);
+            if (response.ok) {
+              skyboxBlob = await response.blob();
+              console.log(`   ✓ Fetched skybox from blob URL: ${skyboxName}`);
+            } else {
+              console.warn(`⚠️ Failed to fetch skybox (HTTP ${response.status}): ${envData.imageUrl}`);
+            }
           } catch (error) {
-            console.warn(`⚠️ Failed to fetch skybox from ${envData.imageUrl}:`, error);
+            console.warn(`⚠️ Failed to fetch skybox from ${envData.imageUrl}:`, error.message);
           }
         }
-        
+
         // If we have the blob, add it to assets
         if (skyboxBlob) {
-          const finalPath = skyboxName; // Skybox goes directly in assets folder
+          // Normalize filename (remove spaces and special characters for better compatibility)
+          const normalizedName = skyboxName.replace(/[^\w\-\.]/g, '_');
+          const finalPath = normalizedName; // Skybox goes directly in assets folder
+
           assetMap.set(finalPath, {
             blob: skyboxBlob,
             finalPath: finalPath,
             type: 'skybox',
             originalPath: envData.imageUrl || skyboxName
           });
-          
-          await assetsFolder.file(skyboxName, skyboxBlob);
-          console.log(`   ✓ Added skybox: ${finalPath}`);
-          
+
+          await assetsFolder.file(normalizedName, skyboxBlob);
+          console.log(`   ✓ Added skybox: ${finalPath} (${(skyboxBlob.size / 1024 / 1024).toFixed(2)} MB)`);
+
           // Update scene data skybox path (normalized)
-          const skyboxPath = `./${assetsFolderName}/${skyboxName}`;
+          const skyboxPath = `./${assetsFolderName}/${normalizedName}`;
           sceneData.skybox = PathResolver.normalizePath(skyboxPath);
         } else {
-          // If we can't get the file, at least update the path reference (normalized)
+          // If we can't get the file, warn the user
+          console.warn(`   ⚠️ Could not include skybox file in ZIP: ${skyboxName}`);
+          console.warn(`   💡 The skybox path will be included in the JSON, but the file is missing.`);
+
+          // Still update the path reference (normalized) in case the file is added manually
           const skyboxPath = `./${assetsFolderName}/${skyboxName}`;
           sceneData.skybox = PathResolver.normalizePath(skyboxPath);
-          console.log(`   ℹ️ Skybox path updated (file not available): ${sceneData.skybox}`);
+          console.log(`   ℹ️ Skybox path saved (file not available): ${sceneData.skybox}`);
         }
       }
     }
-    
+
     // Add scene JSON file (with updated relative paths)
     zip.file(`${baseFilename}.json`, JSON.stringify(sceneData, null, 2));
-    
+
     // Generate ZIP file
     const zipBlob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(zipBlob);
-    
+
     const link = window.document.createElement('a');
     link.href = url;
     link.download = `${baseFilename}.zip`;
     link.click();
-    
+
     URL.revokeObjectURL(url);
-    
+
     console.log(`✅ 3CAD scene package downloaded: ${baseFilename}.zip`);
     console.log(`   📁 Structure: ${baseFilename}.json + ${assetsFolderName}/ folder`);
     console.log(`   📦 Assets: ${assetMap.size} files (${Array.from(assetMap.values()).filter(a => a.type === 'texture').length} textures, ${Array.from(assetMap.values()).filter(a => a.type === 'skybox').length} skybox)`);

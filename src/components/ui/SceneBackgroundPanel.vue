@@ -573,6 +573,8 @@ export default {
           color: selectedBackground.value ? backgroundColors.find(bg => bg.id === selectedBackground.value)?.hexColor : null,
           imageName: selectedBackgroundImage.value?.name,
           imageType: selectedBackgroundImage.value?.type,
+          imageUrl: backgroundImagePreview.value, // Blob URL for export
+          imageFile: selectedBackgroundImage.value, // Original File object
           settings: {
             showGrid: showGrid.value,
             showAxes: showAxes.value,
