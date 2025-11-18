@@ -88,6 +88,7 @@ import * as THREE from 'three'
 import { ThreeView } from '../packages/cad-three/ThreeView.js'
 // import { createVisualObject } from '../packages/cad-three/BasicShapes.js' // Unused for now
 import { useApplicationStore } from '../stores/application.js'
+import { PathResolver } from '../packages/cad-core/io/PathResolver.js'
 
 export default {
   name: 'ThreeScene',
@@ -246,6 +247,153 @@ export default {
       }
 
       console.log('✅ Scene rehydration complete')
+      
+      // Log all objects in Three.js scene
+      if (threeView.value.scene) {
+        const allObjects = []
+        threeView.value.scene.traverse((obj) => {
+          if (obj.isMesh && obj.userData?.nodeId) {
+            allObjects.push({
+              name: obj.name || obj.userData.nodeId,
+              nodeId: obj.userData.nodeId,
+              position: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
+              visible: obj.visible,
+              type: obj.type
+            })
+          }
+        })
+        console.log(`📦 Objects in Three.js scene: ${allObjects.length}`)
+        allObjects.forEach((obj, idx) => {
+          console.log(`   [${idx}] ${obj.name} at (${obj.position.x.toFixed(3)}, ${obj.position.y.toFixed(3)}, ${obj.position.z.toFixed(3)})`)
+        })
+      }
+
+      // Frame camera on imported objects if bounding box is available
+      if (document._importBoundingBox && threeView.value.cameraController) {
+        console.log('🎯 Framing camera on imported objects...')
+        const bbox = document._importBoundingBox
+        
+        // Create THREE.Box3 from stored bounding box (already scaled)
+        const min = new THREE.Vector3(bbox.min.x, bbox.min.y, bbox.min.z)
+        const max = new THREE.Vector3(bbox.max.x, bbox.max.y, bbox.max.z)
+        const boundingBox = new THREE.Box3(min, max)
+        
+        // Frame camera on bounding box
+        threeView.value.cameraController.focusOn(boundingBox, true)
+        console.log(`   Framed on bounds: center (${bbox.center.x.toFixed(3)}, ${bbox.center.y.toFixed(3)}, ${bbox.center.z.toFixed(3)}), size (${bbox.size.x.toFixed(3)}, ${bbox.size.y.toFixed(3)}, ${bbox.size.z.toFixed(3)})`)
+        
+        // Clear the bounding box flag after use
+        delete document._importBoundingBox
+      } else if (processedNodeIds.size > 0 && threeView.value.cameraController) {
+        // If no bounding box but we have objects, try to fit all
+        console.log('🎯 Fitting camera to all objects...')
+        threeView.value.cameraController.fitAll(true)
+      }
+      
+      // Apply skybox/background if available
+      if (document._importSkybox && threeView.value) {
+        console.log(`🌄 Applying skybox: ${document._importSkybox}`)
+        try {
+          const skyboxPath = document._importSkybox
+          const skyboxOptions = document._importSkyboxOptions || {}
+          const jsonFilePath = skyboxOptions.jsonFilePath || null
+          
+          // Use PathResolver to resolve skybox path
+          const pathInfo = PathResolver.resolveAssetPath(skyboxPath, jsonFilePath, {})
+          const skyboxFileName = pathInfo.fileName
+          
+          let skyboxBlob = null
+          let skyboxFile = null
+          
+          // Try to load from resolved paths
+          let loadedFromPath = false
+          for (const path of pathInfo.paths) {
+            try {
+              console.log(`   Trying to load skybox from: ${path}`)
+              const response = await fetch(path)
+              if (response.ok) {
+                skyboxBlob = await response.blob()
+                skyboxFile = new File([skyboxBlob], skyboxFileName, { type: 'image/x-exr' })
+                console.log(`   ✅ Skybox loaded from: ${path}`)
+                loadedFromPath = true
+                break
+              }
+            } catch (e) {
+              // Try next path
+              console.log(`   ❌ Failed to load from ${path}:`, e.message)
+            }
+          }
+          
+          if (!loadedFromPath) {
+            console.warn(`   ⚠️ Could not load skybox from any path.`)
+            console.warn(`   💡 Tip: Place skybox file in public/assets/ folder or use absolute URL.`)
+            console.warn(`   📁 Tried paths: ${pathInfo.paths.join(', ')}`)
+          }
+          
+          if (skyboxFile) {
+            // Load EXR using EXRLoader
+            const { EXRLoader } = await import('three/examples/jsm/loaders/EXRLoader.js')
+            const { ImageLoader } = await import('@/packages/cad-core/io/ImageLoader.js')
+            
+            if (ImageLoader.isHDRFile(skyboxFile)) {
+              console.log(`   📸 Loading EXR file: ${skyboxFileName}`)
+              
+              // Load as ArrayBuffer
+              const arrayBuffer = await ImageLoader.loadHDRAsArrayBuffer(skyboxFile)
+              console.log(`   📦 ArrayBuffer loaded: ${arrayBuffer.byteLength} bytes`)
+              
+              // Parse EXR
+              const exrLoader = new EXRLoader()
+              const exrData = exrLoader.parse(arrayBuffer)
+              
+              if (!exrData) {
+                throw new Error('EXRLoader.parse() returned null')
+              }
+              
+              console.log(`   ✅ EXR data parsed: ${exrData.width}x${exrData.height}`)
+              
+              // Create DataTexture
+              const texture = new THREE.DataTexture(
+                exrData.data,
+                exrData.width,
+                exrData.height,
+                THREE.RGBAFormat,
+                THREE.HalfFloatType
+              )
+              
+              texture.mapping = THREE.EquirectangularReflectionMapping
+              texture.colorSpace = THREE.LinearSRGBColorSpace
+              texture.flipY = false
+              texture.minFilter = THREE.LinearFilter
+              texture.magFilter = THREE.LinearFilter
+              texture.generateMipmaps = false
+              texture.unpackAlignment = 1
+              
+              // Apply to scene
+              threeView.value.scene.background = texture
+              threeView.value.scene.environment = texture // Also set as environment for reflections
+              threeView.value.renderer.toneMapping = THREE.ACESFilmicToneMapping
+              threeView.value.renderer.toneMappingExposure = 1.0
+              threeView.value.renderer.outputColorSpace = THREE.SRGBColorSpace
+              
+              console.log(`   ✅ Skybox applied to scene background and environment`)
+              threeView.value.requestRender()
+            } else {
+              console.warn(`   ⚠️ File is not HDR/EXR format: ${skyboxFileName}`)
+            }
+          } else {
+            console.warn(`   ⚠️ Could not load skybox from "${skyboxPath}"`)
+          }
+        } catch (error) {
+          console.error(`   ❌ Failed to apply skybox:`, error)
+        }
+        
+        // Clear skybox flags after use
+        delete document._importSkybox
+        delete document._importSkyboxOriginal
+        delete document._importSkyboxOptions
+      }
+      
       threeView.value.requestRender()
     }
 
@@ -342,6 +490,77 @@ export default {
               const object3D = await visualObject.create()
 
               if (object3D) {
+                // CRITICAL: Apply pending material AFTER object is created
+                if (visualObject._pendingMaterial) {
+                  const material = visualObject._pendingMaterial
+                  console.log(`📦 Applying pending material to ${node.name}:`, material)
+                  
+                  try {
+                    if (material.type === 'custom-texture' && material.texture) {
+                      // Custom texture material
+                      const texturePath = material.texture
+                      console.log(`   Loading texture: ${texturePath}`)
+                      
+                      // Get texture repeat if available
+                      const repeatX = visualObject.getProperty('textureRepeatX') || 1
+                      const repeatY = visualObject.getProperty('textureRepeatY') || 1
+                      
+                      // Try to load texture from path
+                      if (texturePath.startsWith('http://') || texturePath.startsWith('https://') || texturePath.startsWith('data:')) {
+                        await visualObject.setTextureFromUrl(texturePath, {
+                          repeatX,
+                          repeatY
+                        })
+                      } else {
+                        // Try common paths
+                        const possiblePaths = [
+                          texturePath,
+                          `/textures/${texturePath}`,
+                          `/assets/${texturePath}`,
+                          `./assets/textures/${texturePath.replace(/^\.\/assets\/textures\//, '')}`,
+                          `./${texturePath}`
+                        ]
+                        
+                        let loaded = false
+                        for (const path of possiblePaths) {
+                          try {
+                            await visualObject.setTextureFromUrl(path, {
+                              repeatX,
+                              repeatY
+                            })
+                            console.log(`   ✅ Texture loaded from: ${path} (repeat: ${repeatX}x${repeatY})`)
+                            loaded = true
+                            break
+                          } catch (e) {
+                            // Try next path
+                          }
+                        }
+                        
+                        if (!loaded) {
+                          console.warn(`   ⚠️ Could not load texture "${texturePath}", using default material`)
+                        }
+                      }
+                    } else if (material.type && material.color !== undefined) {
+                      // Preset material type (plastic, metal, etc.)
+                      console.log(`   Applying preset material: ${material.type}`)
+                      await visualObject.setMaterial(material.type)
+                      
+                      // Apply color if provided
+                      if (material.color) {
+                        const colorHex = typeof material.color === 'number' 
+                          ? '#' + material.color.toString(16).padStart(6, '0')
+                          : material.color
+                        visualObject.setProperty('color', colorHex)
+                      }
+                    }
+                  } catch (error) {
+                    console.error(`   ❌ Failed to apply material:`, error)
+                  }
+                  
+                  // Clear pending material
+                  delete visualObject._pendingMaterial
+                }
+                
                 // Add to the 3D scene
                 threeView.value.addVisualObject(node.id, object3D)
 
@@ -648,13 +867,41 @@ export default {
     }
 
     // Watch for document changes
-    watch(activeDocument, (newDocument) => {
+    watch(activeDocument, async (newDocument, oldDocument) => {
       if (threeView.value && newDocument) {
         // Update ThreeView's document reference
         threeView.value.document = newDocument
-        console.log('ThreeView document updated')
+        console.log('ThreeView document updated:', newDocument.name)
+        
+        // Rehydrate scene when document changes OR when nodes change
+        // This ensures imported documents are properly displayed
+        const isDifferentDocument = !oldDocument || oldDocument.id !== newDocument.id
+        const nodeCountChanged = oldDocument && oldDocument.nodes.length !== newDocument.nodes.length
+        
+        if (isDifferentDocument || nodeCountChanged) {
+          console.log(`Document changed (different: ${isDifferentDocument}, nodes changed: ${nodeCountChanged}), rehydrating scene...`)
+          await rehydrateSceneFromStore()
+        }
       }
-    })
+    }, { immediate: false })
+
+    // Also watch for node count changes in the same document (for imports)
+    watch(() => activeDocument.value?.nodes.length, async (newCount, oldCount) => {
+      if (threeView.value && activeDocument.value && newCount !== oldCount && oldCount !== undefined) {
+        console.log(`📊 Node count changed: ${oldCount} → ${newCount}, forcing scene rehydration...`)
+        await rehydrateSceneFromStore()
+      }
+    }, { immediate: false })
+
+    // Watch for nodes collection changes (more reliable than just count)
+    watch(() => activeDocument.value?.nodes, async (newNodes, oldNodes) => {
+      if (threeView.value && activeDocument.value && newNodes && oldNodes && newNodes.length !== oldNodes.length) {
+        console.log(`📊 Nodes collection changed: ${oldNodes.length} → ${newNodes.length}, forcing scene rehydration...`)
+        // Small delay to ensure all nodes are fully loaded
+        await new Promise(resolve => setTimeout(resolve, 50))
+        await rehydrateSceneFromStore()
+      }
+    }, { deep: false })
 
     onMounted(async () => {
       console.log('🚀 ThreeScene component mounted')
@@ -700,6 +947,23 @@ export default {
     onUnmounted(() => {
       cleanup()
     })
+
+    // Expose rehydration method for external triggers (e.g., after import)
+    const forceRehydrate = async () => {
+      console.log('🔄 Force rehydration triggered externally...')
+      await rehydrateSceneFromStore()
+    }
+    
+    // Expose globally for import handler
+    if (typeof window !== 'undefined') {
+      window.__THREESCENE_FORCE_REHYDRATE__ = forceRehydrate
+      // Expose ThreeView instance for export/import operations
+      watch(threeView, (newView) => {
+        if (newView) {
+          window.__THREESCENE_INSTANCE__ = newView
+        }
+      }, { immediate: true })
+    }
 
     // Expose methods for external use
     const getThreeView = () => threeView.value

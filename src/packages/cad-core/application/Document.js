@@ -377,7 +377,9 @@ export class Document extends Observable {
     this._history.clear();
 
     // Load basic properties
-    this._id = data.id || this._generateId('doc');
+    // IMPORTANT: Always generate new ID when loading from data to ensure document change detection
+    // This ensures that imports trigger document change watchers even if the source document ID matches
+    this._id = this._generateId('doc');
     this._name = data.name || 'Untitled';
     this._created = data.created ? new Date(data.created) : new Date();
     this._lastSaved = data.lastSaved ? new Date(data.lastSaved) : null;
@@ -702,19 +704,27 @@ export class Document extends Observable {
             depth: properties.depth || 1
           });
 
-          // Restore properties
+          // CRITICAL: Set position directly (not just as property) so it's applied to the object
           if (properties.position) {
-            visualObject.setProperty('position', properties.position);
+            visualObject.position = properties.position;
           }
+          
+          // CRITICAL: Set rotation directly
           if (properties.rotation) {
-            visualObject.setProperty('rotation', properties.rotation);
+            visualObject.rotation = properties.rotation;
           }
+          
+          // Restore color
           if (properties.color) {
             visualObject.setProperty('color', properties.color);
           }
+          
+          // Store material info - will be applied after object creation
+          let materialToRestore = null;
           if (properties.material) {
-            visualObject.setProperty('material', properties.material);
+            materialToRestore = properties.material;
           }
+          
           if (properties.roughness !== undefined) {
             visualObject.setProperty('roughness', properties.roughness);
           }
@@ -727,6 +737,12 @@ export class Document extends Observable {
           // Set wireframe to false by default for solid objects that can be clicked anywhere
           visualObject.setProperty('wireframe', properties.wireframe ?? false);
 
+          // CRITICAL: Apply material AFTER object is created (in handleNodeAdded)
+          // Store material info in visualObject for later application
+          if (materialToRestore) {
+            visualObject._pendingMaterial = materialToRestore;
+          }
+
           return visualObject;
         }
 
@@ -738,7 +754,7 @@ export class Document extends Observable {
           });
 
           // Restore common properties
-          this._restoreCommonProperties(visualObject, properties);
+          await this._restoreCommonProperties(visualObject, properties);
           return visualObject;
         }
 
@@ -750,7 +766,7 @@ export class Document extends Observable {
             radialSegments: properties.radialSegments || 32
           });
 
-          this._restoreCommonProperties(visualObject, properties);
+          await this._restoreCommonProperties(visualObject, properties);
           return visualObject;
         }
 
@@ -760,7 +776,7 @@ export class Document extends Observable {
             height: properties.height || 1
           });
 
-          this._restoreCommonProperties(visualObject, properties);
+          await this._restoreCommonProperties(visualObject, properties);
           return visualObject;
         }
 
@@ -771,7 +787,7 @@ export class Document extends Observable {
             radialSegments: properties.radialSegments || 32
           });
 
-          this._restoreCommonProperties(visualObject, properties);
+          await this._restoreCommonProperties(visualObject, properties);
           return visualObject;
         }
 
@@ -783,7 +799,7 @@ export class Document extends Observable {
             tubularSegments: properties.tubularSegments || 100
           });
 
-          this._restoreCommonProperties(visualObject, properties);
+          await this._restoreCommonProperties(visualObject, properties);
           return visualObject;
         }
 
@@ -797,19 +813,27 @@ export class Document extends Observable {
     }
   }
 
-  _restoreCommonProperties(visualObject, properties) {
+  async _restoreCommonProperties(visualObject, properties) {
+    // CRITICAL: Set position directly (not just as property) so it's applied to the object
     if (properties.position) {
-      visualObject.setProperty('position', properties.position);
+      visualObject.position = properties.position;
     }
+    
+    // CRITICAL: Set rotation directly
     if (properties.rotation) {
-      visualObject.setProperty('rotation', properties.rotation);
+      visualObject.rotation = properties.rotation;
     }
+    
+    // Restore color
     if (properties.color) {
       visualObject.setProperty('color', properties.color);
     }
+    
+    // Store material info - will be applied after object creation
     if (properties.material) {
-      visualObject.setProperty('material', properties.material);
+      visualObject._pendingMaterial = properties.material;
     }
+    
     if (properties.roughness !== undefined) {
       visualObject.setProperty('roughness', properties.roughness);
     }

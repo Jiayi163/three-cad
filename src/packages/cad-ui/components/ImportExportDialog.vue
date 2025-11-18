@@ -40,6 +40,25 @@
             </label>
           </div>
 
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input
+                v-model="exportOptions.packageAsZip"
+                type="checkbox"
+              />
+              <span>Export as ZIP package (with assets folder)</span>
+            </label>
+            <p class="help-text">
+              Creates a ZIP file with JSON and assets folder. Structure:<br>
+              <code>scene.json</code><br>
+              <code>assets/textures/</code> (texture files)<br>
+              <code>assets/</code> (skybox/background files)
+            </p>
+            <p class="help-text" style="margin-top: 0.5rem; font-size: 0.85em; color: #666;">
+              All paths in JSON use relative paths (e.g., <code>./assets/textures/image.png</code>)
+            </p>
+          </div>
+
           <div v-if="documentInfo" class="info-box">
             <h4>Document Information</h4>
             <div class="info-row">
@@ -66,8 +85,12 @@
           >
             <div class="upload-icon">📁</div>
             <p class="upload-text">
-              Drag and drop a .json file here<br>
+              Drag and drop a .json or .zip file here<br>
               or
+            </p>
+            <p class="help-text" style="margin-top: 0.5rem; font-size: 0.85em; color: #666;">
+              💡 <strong>Tip:</strong> Use ZIP package to include assets (textures, skybox).<br>
+              Single JSON files may not load external assets due to browser security.
             </p>
             <button class="upload-button" @click="$refs.fileInput.click()">
               Select File
@@ -75,7 +98,7 @@
             <input
               ref="fileInput"
               type="file"
-              accept=".json"
+              accept=".json,.zip"
               style="display: none"
               @change="handleFileSelect"
             />
@@ -95,6 +118,15 @@
               <div class="validation-icon">✓</div>
               <div class="validation-details">
                 <h4>Valid Project File</h4>
+                <div class="info-row" v-if="validationResult.info.isZipPackage !== undefined">
+                  <span class="info-label">Format:</span>
+                  <span class="info-value">
+                    {{ validationResult.info.isZipPackage ? 'ZIP Package' : 'JSON File' }}
+                    <span v-if="validationResult.info.hasAssets" style="color: #4caf50;">
+                      ({{ validationResult.info.assetsCount }} assets)
+                    </span>
+                  </span>
+                </div>
                 <div class="info-row">
                   <span class="info-label">Document:</span>
                   <span class="info-value">{{ validationResult.info.documentName }}</span>
@@ -103,7 +135,7 @@
                   <span class="info-label">Objects:</span>
                   <span class="info-value">{{ validationResult.info.nodeCount }}</span>
                 </div>
-                <div class="info-row">
+                <div class="info-row" v-if="validationResult.info.textureCount !== undefined">
                   <span class="info-label">Textures:</span>
                   <span class="info-value">{{ validationResult.info.textureCount }}</span>
                 </div>
@@ -200,7 +232,9 @@ export default {
     const exportFilename = ref('');
     const exportOptions = ref({
       embedTextures: true,
-      includeHistory: false
+      includeHistory: false,
+      packageAsZip: true,  // Default to ZIP package (includes assets folder)
+      assetsFolderName: 'assets'  // Folder name for assets
     });
 
     // Import state
@@ -253,10 +287,17 @@ export default {
         isProcessing.value = true;
         errorMessage.value = '';
 
-        const filename = await ProjectExporter.exportAndDownload(
+        // Get ThreeView instance if available (for skybox export)
+        const threeView = window.__THREESCENE_INSTANCE__ || null;
+
+        // Use exportThreeCADAndDownload for 3CAD scene format
+        const filename = await ProjectExporter.exportThreeCADAndDownload(
           props.document,
           exportFilename.value,
-          exportOptions.value
+          {
+            ...exportOptions.value,
+            threeView
+          }
         );
 
         emit('export-complete', { filename });
@@ -294,7 +335,11 @@ export default {
         validationResult.value = result;
 
         if (!result.valid) {
-          errorMessage.value = 'Invalid project file. Please select a valid .json export file.';
+          if (file.name.toLowerCase().endsWith('.zip')) {
+            errorMessage.value = 'Invalid ZIP package. Please select a valid .zip export file.';
+          } else {
+            errorMessage.value = 'Invalid project file. Please select a valid .json or .zip export file.';
+          }
         }
       } catch (error) {
         errorMessage.value = error.message;
@@ -311,9 +356,13 @@ export default {
         isProcessing.value = true;
         errorMessage.value = '';
 
+        // Get ThreeView instance if available (for skybox application)
+        const threeView = window.__THREESCENE_INSTANCE__ || null;
+
         const document = await ProjectImporter.importFromFile(
           selectedFile.value,
-          props.application
+          props.application,
+          { threeView }
         );
 
         emit('import-complete', { document });
@@ -350,6 +399,7 @@ export default {
       canImport,
       close,
       handleExport,
+      handleImport,
       handleFileSelect,
       handleFileDrop,
       formatDate,

@@ -836,9 +836,46 @@ export default {
       currentOperation.value = `Exported: ${filename}`
     }
 
-    const handleImportComplete = ({ document }) => {
-      console.log('Import completed:', document.name)
+    const handleImportComplete = async ({ document }) => {
+      console.log('📥 Import completed:', document.name)
+      console.log(`   Document has ${document.nodes.length} nodes`)
+      console.log(`   Document ID: ${document.id}`)
+      console.log(`   Active document in store: ${appStore.activeDocument?.name} (ID: ${appStore.activeDocument?.id})`)
       currentOperation.value = `Imported: ${document.name}`
+      
+      // Sync document state to ensure store is updated
+      appStore.syncDocumentState()
+      
+      // Wait for next tick to ensure Vue reactivity has updated
+      await nextTick()
+      
+      // Check if active document matches imported document
+      if (appStore.activeDocument?.id !== document.id) {
+        console.warn('⚠️ Active document mismatch! Setting imported document as active...')
+        // Force set the imported document as active
+        if (appStore.application) {
+          appStore.application.setActiveDocument(document)
+          appStore.syncDocumentState()
+          await nextTick()
+        }
+      }
+      
+      // Force scene rehydration after import
+      // Use global function if available, otherwise wait for watch to trigger
+      if (typeof window !== 'undefined' && window.__THREESCENE_FORCE_REHYDRATE__) {
+        console.log('🔄 Forcing scene rehydration after import...')
+        await window.__THREESCENE_FORCE_REHYDRATE__()
+      } else {
+        console.log('⏳ Waiting for automatic scene rehydration...')
+        // Wait a bit more for watch to trigger
+        await new Promise(resolve => setTimeout(resolve, 200))
+        // Try one more time
+        if (typeof window !== 'undefined' && window.__THREESCENE_FORCE_REHYDRATE__) {
+          await window.__THREESCENE_FORCE_REHYDRATE__()
+        }
+      }
+      
+      console.log('✅ Import handling complete')
     }
 
     const handleImportExportError = (error) => {
